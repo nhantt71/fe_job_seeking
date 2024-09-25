@@ -1,10 +1,31 @@
+"use client";
 import Head from 'next/head';
+import { useEffect, useState } from 'react';
 import CustomTopBar from './customtopbar';
+import FeaturedJob from './featuredjob';
 import Footer from './footer';
 import JobList from './joblist';
 import SearchBar from './searchbar';
 
 export default function Home() {
+
+  const [categories, setCategories] = useState([])
+
+  useEffect(() => {
+    fetch('http://localhost:8080/api/category/get-job-amount')
+      .then(res => res.json())
+      .then(data => setCategories(data))
+  }, [])
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  const totalPages = Math.ceil(categories.length / itemsPerPage);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = categories.slice(indexOfFirstItem, indexOfLastItem);
+
   return (
     <>
       <CustomTopBar />
@@ -15,79 +36,48 @@ export default function Home() {
       </Head>
 
       <main className="bg-gray-100 min-h-screen">
-        {/* Hero Section */}
         <section className="bg-blue-600 py-20">
           <div className="container mx-auto text-center text-white">
             <h1 className="text-5xl font-bold">Find Your Dream Job or Hire Top Talent</h1>
             <p className="text-xl mt-4">
               Explore thousands of job listings or post opportunities to find the best candidates.
             </p>
-            {/* Search Form */}
             <SearchBar />
           </div>
         </section>
 
-        <JobList/>
-        {/* Job Categories */}
-        <section className="py-16">
-          <div className="container mx-auto text-center">
-            <h2 className="text-3xl font-bold">Job Categories</h2>
-            <p className="mt-2 text-gray-700">Browse by popular categories</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8">
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">Software Development</h3>
-                <p className="text-sm text-gray-500">1123 Jobs Available</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">Design &amp; Creative</h3>
-                <p className="text-sm text-gray-500">742 Jobs Available</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">Marketing</h3>
-                <p className="text-sm text-gray-500">560 Jobs Available</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">Customer Support</h3>
-                <p className="text-sm text-gray-500">318 Jobs Available</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        <JobList />
 
-        {/* Featured Jobs */}
-        <section className="py-16 bg-gray-50">
-          <div className="container mx-auto text-center">
-            <h2 className="text-3xl font-bold">Featured Jobs</h2>
-            <p className="mt-2 text-gray-700">Check out the latest job postings</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">Frontend Developer</h3>
-                <p className="text-sm text-gray-500">Google Inc. - Remote</p>
-                <p className="mt-4 text-gray-700">$80,000 - $100,000/year</p>
-                <a href="#" className="block mt-4 text-blue-500 font-semibold">
-                  View Details
-                </a>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">UI/UX Designer</h3>
-                <p className="text-sm text-gray-500">Apple Inc. - California, USA</p>
-                <p className="mt-4 text-gray-700">$90,000 - $120,000/year</p>
-                <a href="#" className="block mt-4 text-blue-500 font-semibold">
-                  View Details
-                </a>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg">
-                <h3 className="text-lg font-semibold">Marketing Manager</h3>
-                <p className="text-sm text-gray-500">Amazon - Seattle, USA</p>
-                <p className="mt-4 text-gray-700">$70,000 - $90,000/year</p>
-                <a href="#" className="block mt-4 text-blue-500 font-semibold">
-                  View Details
-                </a>
-              </div>
-            </div>
+        <div className="container mx-auto px-4 py-8">
+          <h1 className="text-3xl font-bold mb-8 text-black">Top ngành nghề nổi bật</h1>
+          <div className="grid grid-cols-4 gap-4">
+            {currentItems.map((cate) => (
+              <FeaturedJob key={cate.name} {...cate} />
+            ))}
           </div>
-        </section>
-        <Footer/>
+
+          <div className="flex justify-center items-center space-x-4 mt-8">
+            <button
+              className={`rounded-full p-2 ${currentPage === 1 ? 'bg-gray-200' : 'bg-green-500'} text-white`}
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+            >
+              &#8249;
+            </button>
+
+            <span className="text-black font-medium">Trang {currentPage} / {totalPages}</span>
+
+            <button
+              className={`rounded-full p-2 ${currentPage === totalPages ? 'bg-gray-200' : 'bg-green-500'} text-white`}
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+            >
+              &#8250;
+            </button>
+          </div>
+        </div>
+
+        <Footer />
       </main>
     </>
   );

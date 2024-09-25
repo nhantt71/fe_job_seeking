@@ -18,7 +18,9 @@ function JobList() {
     const currentJobs = jobs.slice((currentPage - 1) * jobsPerPage, currentPage * jobsPerPage);
 
     return (
+        
         <div className="mt-4 container mx-auto">
+            <h1 className="text-3xl font-bold mb-8 text-black">Việc làm đang tuyển dụng</h1>
             <div className="grid grid-cols-3 gap-4">
                 {currentJobs.map(job => (
                     <div key={job.id} className="bg-white shadow-md rounded px-4 py-6">
