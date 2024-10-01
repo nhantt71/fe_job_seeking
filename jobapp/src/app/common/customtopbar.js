@@ -1,17 +1,17 @@
 
 const CustomTopBar = () => {
     return (
-        <header className="bg-white shadow-md py-3">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <header className="bg-white shadow-md py-3 fixed top-0 left-0 w-full z-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-0 flex justify-between items-center">
 
                 <div className="flex items-center space-x-4">
                     <span className="text-sm text-gray-600">Seeking & Hiring Job</span>
                 </div>
 
-                <nav className="flex space-x-8 text-gray-800 text-lg">
-                    <a href="#" className="hover:text-green-600">Jobs</a>
-                    <a href="#" className="hover:text-green-600">Profile & CV</a>
-                    <a href="#" className="hover:text-green-600">Company</a>
+                <nav className="flex space-x-8 text-gray-800">
+                    <a href="#" className="hover:text-green-600 text-sm">Jobs</a>
+                    <a href="#" className="hover:text-green-600 text-sm">Profile & CV</a>
+                    <a href="#" className="hover:text-green-600 text-sm">Company</a>
                 </nav>
 
                 <div className="flex items-center space-x-6">
@@ -33,7 +33,7 @@ const CustomTopBar = () => {
                             <button className="flex items-center space-x-2 focus:outline-none">
                                 <img
                                     className="h-8 w-8 rounded-full"
-                                    src="/profile.png"
+                                    src="https://res.cloudinary.com/dsp3ymism/image/upload/v1727003509/wmxpdyr6oftjnzcyrusr.jpg"
                                     alt="User Profile"
                                 />
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

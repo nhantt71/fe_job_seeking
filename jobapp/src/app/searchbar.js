@@ -1,33 +1,36 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-const SearchBar = () => {
+const SearchBar = ({ onSearch }) => {
     const [cities, setCities] = useState([]);
     const [categories, setCategories] = useState([]);
     const [keyword, setKeyword] = useState('');
-    const [isLoading, setLoading] = useState(true)
-    const [selectedCategory, setSelectedCategory] = useState('')
-    const [selectedCity, setSelectedCity] = useState('')
-    const [job, setJob] = useState('')
-    
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedProvince, setSelectedProvince] = useState('');
+    const [isLoading, setLoading] = useState(true);
+
     useEffect(() => {
         fetch('http://localhost:8080/api/category')
             .then(res => res.json())
             .then(data => {
-                setCategories(data)
-                setLoading(false)
-            })
-    }, [])
+                setCategories(data);
+                setLoading(false);
+            });
+    }, []);
 
     useEffect(() => {
         fetch('https://provinces.open-api.vn/api/')
             .then(res => res.json())
-            .then(data => setCities(data))
-    }, [])
+            .then(data => setCities(data));
+    }, []);
 
     const handleSearch = (e) => {
         e.preventDefault();
-        console.log('Keyword:', keyword, 'City:', cities, 'Category:', categories);
+        onSearch({
+            keyword,
+            province: selectedProvince,
+            categoryId: selectedCategory,
+        });
     };
 
     return (
@@ -42,20 +45,22 @@ const SearchBar = () => {
                     onChange={(e) => setKeyword(e.target.value)}
                 />
 
+                {/* Chọn thành phố */}
                 <select
                     className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none"
                     style={{ color: 'black' }}
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value)}
+                    value={selectedProvince}
+                    onChange={(e) => setSelectedProvince(e.target.value)}
                 >
                     <option value="" disabled>Chọn thành phố</option>
                     {cities.map((city) => (
-                        <option value={city.name}>
+                        <option value={city.name} key={city.code}>
                             {city.name}
                         </option>
                     ))}
                 </select>
 
+                {/* Chọn danh mục công việc */}
                 <select
                     className="text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none"
                     value={selectedCategory}

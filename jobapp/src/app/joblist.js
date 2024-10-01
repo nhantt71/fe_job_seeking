@@ -29,7 +29,7 @@ function JobList() {
                                 <img src={job.company.logo} alt={job.company} className="w-16 h-16 mr-4" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-black">{job.detail}</h3>
+                                <h3 className="text-xl font-bold text-black">{job.name}</h3>
                                 <p className="text-gray-700 text-black">{job.company.name}</p>
                                 <p className="text-gray-500 text-black">{job.salary} VND</p>
                             </div>

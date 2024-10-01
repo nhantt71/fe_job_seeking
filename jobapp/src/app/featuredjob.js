@@ -1,17 +1,13 @@
 'use client';
 
-function FeaturedJob({ icon, name, jobs }) {
+const FeaturedJobs = ({ icon, name, jobCount }) => {
     return (
-        <div className="bg-white shadow-md rounded-lg px-5 py-4">
-            <div className="flex items-center">
-                <div className="ml-4 center">
-                    <img src={icon}/>
-                    <h5 className="text-gray-900 text-xl font-medium">{name}</h5>
-                    <p className="text-gray-700">{jobs} việc làm</p>
-                </div>
-            </div>
+        <div className="border p-4 rounded-lg flex flex-col items-center">
+            <img src={icon} height={100} width={100}/>
+            <h3 className="text-xl font-semibold mt-2 text-black">{name}</h3>
+            <p className="text-sm text-black">{jobCount} việc làm</p>
         </div>
     );
-}
+};
 
-export default FeaturedJob;
+export default FeaturedJobs;
