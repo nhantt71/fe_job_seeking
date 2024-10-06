@@ -1,17 +1,17 @@
 "use client";
+
 import Head from 'next/head';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import CustomTopBar from './common/customtopbar';
 import Footer from './common/footer';
+import SearchBar from './common/searchbar';
 import FeaturedCompanies from './featuredcompany';
 import FeaturedJobs from './featuredjob';
-import FindingJobList from './findingjoblist';
 import JobList from './joblist';
-import SearchBar from './searchbar';
 
 export default function Home() {
-
-  const [categories, setCategories] = useState([])
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchMode, setSearchMode] = useState(false);
   const [page, setPage] = useState(0);
@@ -19,6 +19,7 @@ export default function Home() {
   const startIdx = page * categoriesPerPage;
   const paginatedCategories = categories.slice(startIdx, startIdx + categoriesPerPage);
 
+  const router = useRouter();
 
   useEffect(() => {
     fetch('http://localhost:8080/api/category/get-job-amount')
@@ -28,46 +29,27 @@ export default function Home() {
         setCategories(filteredData);
       })
       .finally(() => setLoading(false));
-  }, [])
-
+  }, []);
 
   const handlePrev = () => {
     setPage((prev) => (prev > 0 ? prev - 1 : prev));
   };
-
 
   const handleNext = () => {
     const maxPages = Math.ceil(categories.length / categoriesPerPage);
     setPage((prev) => (prev < maxPages - 1 ? prev + 1 : prev));
   };
 
-
-  const [findingJobs, setFindingJobs] = useState([]);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const jobsPerPage = 20;
-
-  const indexOfLastJob = currentPage * jobsPerPage;
-  const indexOfFirstJob = indexOfLastJob - jobsPerPage;
-  const currentJobs = findingJobs.slice(indexOfFirstJob, indexOfLastJob);
-
-  const totalPages = Math.ceil(findingJobs.length / jobsPerPage);
-  const [searchResults, setSearchResults] = useState([]);
-
-  const handlePageChange = (pageNumber) => {
-    setCurrentPage(pageNumber);
-  };
-
-
   const handleSearch = (searchQuery) => {
     fetch(`http://localhost:8080/api/job/search?keyword=${searchQuery.keyword}`)
       .then(res => res.json())
       .then(data => {
-        setSearchResults(data);
+        localStorage.setItem('searchResults', JSON.stringify(data));
         setSearchMode(true);
+
+        router.push('/job');
       });
   };
-
 
   return (
     <>
@@ -91,8 +73,6 @@ export default function Home() {
 
         {searchMode ? (
           <>
-            <FindingJobList jobs={searchResults} />
-            <Footer />
           </>
         ) : (
           <>
@@ -138,13 +118,11 @@ export default function Home() {
                   </div>
                 </div>
                 <FeaturedCompanies />
-
                 <Footer />
               </>
             )}
           </>
         )}
-
       </main>
     </>
   );

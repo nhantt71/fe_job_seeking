@@ -1,18 +1,22 @@
 "use client";
-
 import Head from 'next/head';
-import { useRouter } from 'next/navigation'; // Vẫn sử dụng 'next/navigation'
 import { useEffect, useState } from 'react';
-import CustomTopBar from '../common/customtopbar';
-import Footer from '../common/footer';
-import SearchBar from '../common/searchbar';
-import FindingJobList from '../findingjoblist';
+import CustomTopBar from '../../common/customtopbar';
+import Footer from '../../common/footer';
+import SearchBar from '../../common/searchbar';
+import RelatedJob from '../../relatedjob';
+import CompanyDetail from './companydetail';
 
 export default function Home() {
-    const [categories, setCategories] = useState([]);
+
+    const [categories, setCategories] = useState([])
     const [loading, setLoading] = useState(true);
-    const [searchResults, setSearchResults] = useState([]);
-    const router = useRouter();
+    const [searchMode, setSearchMode] = useState(false);
+    const [page, setPage] = useState(0);
+    const categoriesPerPage = 8;
+    const startIdx = page * categoriesPerPage;
+    const [relatedJobs, setRelatedJobs] = useState([]);
+
 
     useEffect(() => {
         fetch('http://localhost:8080/api/category/get-job-amount')
@@ -22,23 +26,22 @@ export default function Home() {
                 setCategories(filteredData);
             })
             .finally(() => setLoading(false));
-    }, []);
+    }, [])
 
-    useEffect(() => {
-        // Khi trang được load, kiểm tra và lấy dữ liệu từ localStorage nếu có
-        const storedResults = localStorage.getItem('searchResults');
-        if (storedResults) {
-            setSearchResults(JSON.parse(storedResults));
-        }
-    }, []);
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const jobsPerPage = 20;
+
+    const indexOfLastJob = currentPage * jobsPerPage;
+    const indexOfFirstJob = indexOfLastJob - jobsPerPage;
+
 
     const handleSearch = (searchQuery) => {
         fetch(`http://localhost:8080/api/job/search?keyword=${searchQuery.keyword}`)
             .then(res => res.json())
             .then(data => {
                 setSearchResults(data);
-                localStorage.setItem('searchResults', JSON.stringify(data));
-                router.push('/job');
+                setSearchMode(true);
             });
     };
 
@@ -62,17 +65,31 @@ export default function Home() {
                     </div>
                 </section>
 
-                {searchResults.length > 0 ? (
+                {searchMode ? (
                     <>
                         <FindingJobList jobs={searchResults} />
                         <Footer />
                     </>
                 ) : (
                     <>
-                        <p>No jobs found</p>
-                        <Footer />
+                        {loading ? (
+                            <div className="flex justify-center items-center py-8">
+                                <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32"></div>
+                                <p className="ml-4 text-lg text-black">Loading...</p>
+                            </div>
+                        ) : (
+                            <>
+                                <CompanyDetail />
+                                <div className="max-w-7xl mx-auto p-6 text-black">
+                                    <h1 className="text-3xl font-bold mb-6 text-black-700 text-black">Việc làm "" tương tự</h1>
+                                    <RelatedJob jobs={relatedJobs} />
+                                </div>
+                                <Footer />
+                            </>
+                        )}
                     </>
                 )}
+
             </main>
         </>
     );

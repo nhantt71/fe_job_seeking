@@ -19,7 +19,7 @@ const SearchBar = ({ onSearch }) => {
     }, []);
 
     useEffect(() => {
-        fetch('https://provinces.open-api.vn/api/')
+        fetch('http://localhost:8080/api/v1/locations/provinces')
             .then(res => res.json())
             .then(data => setCities(data));
     }, []);
@@ -45,7 +45,6 @@ const SearchBar = ({ onSearch }) => {
                     onChange={(e) => setKeyword(e.target.value)}
                 />
 
-                {/* Chọn thành phố */}
                 <select
                     className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none"
                     style={{ color: 'black' }}
@@ -54,13 +53,12 @@ const SearchBar = ({ onSearch }) => {
                 >
                     <option value="" disabled>Chọn thành phố</option>
                     {cities.map((city) => (
-                        <option value={city.name} key={city.code}>
-                            {city.name}
+                        <option value={city}>
+                            {city}
                         </option>
                     ))}
                 </select>
 
-                {/* Chọn danh mục công việc */}
                 <select
                     className="text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none"
                     value={selectedCategory}
