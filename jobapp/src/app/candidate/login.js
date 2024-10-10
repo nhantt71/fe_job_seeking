@@ -10,7 +10,7 @@ export default function Login() {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 text-black">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-md shadow-md">
                 <h2 className="text-2xl font-bold text-center text-gray-800">Login</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -43,7 +43,7 @@ export default function Login() {
                 </form>
                 <p className="text-sm text-center text-gray-600">
                     Don't have an account?{' '}
-                    <a href="employee/register" className="text-blue-500 hover:underline">
+                    <a href="register" className="text-blue-500 hover:underline">
                         Register here
                     </a>
                 </p>

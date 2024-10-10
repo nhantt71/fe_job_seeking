@@ -1,23 +1,15 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
-const CustomTopBar = () => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [isOpen1, setIsOpen1] = useState(false);
-    const dropdownRef = useRef(null);
-    const dropdownRef1 = useRef(null);
+const RecruiterCustomTopBar = () => {
     const dropdownRef2 = useRef(null);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
     useEffect(() => {
         function handleClickOutside(event) {
             if (
-                (dropdownRef.current && !dropdownRef.current.contains(event.target)) &&
-                (dropdownRef1.current && !dropdownRef1.current.contains(event.target)) &&
                 (dropdownRef2.current && !dropdownRef2.current.contains(event.target))
             ) {
-                setIsOpen(false);
-                setIsOpen1(false);
                 setIsUserMenuOpen(false);
             }
         }
@@ -31,76 +23,30 @@ const CustomTopBar = () => {
         <header className="bg-white shadow-md py-3 fixed top-0 left-0 w-full z-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-0 flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                    <Link href="/" className="hover:text-sm text-gray-600">
+                    <Link href="/recruiter" className="hover:text-sm text-gray-600">
                         <span className="text-sm text-gray-600">Seeking & Hiring Job</span>
                     </Link>
                 </div>
 
                 <nav className="flex space-x-8 text-gray-800">
-                    <Link href="/job" className="hover:text-green-600 text-sm">
-                        <p>Jobs</p>
+                    <Link href="/recruiter/my-company" className="hover:text-green-600 text-sm">
+                        <p>My Company</p>
                     </Link>
-                    <Link href="/job-recommendation" className="hover:text-green-600 text-sm">
-                        <p>Recommendation Jobs</p>
+                    <Link href="/recruiter/jobs-management" className="hover:text-green-600 text-sm">
+                        <p>Jobs Management</p>
                     </Link>
-                    <div className="relative inline-block text-center" ref={dropdownRef}>
-                        <button
-                            onClick={() => setIsOpen((prev) => !prev)}
-                            className="hover:text-green-600 text-sm"
-                        >
-                            Profile & CV
-                        </button>
-                        {isOpen && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <ul>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/profile" className="text-gray-700">
-                                            Profile
-                                        </Link>
-                                    </li>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/cv" className="text-gray-700">
-                                            CV
-                                        </Link>
-                                    </li>
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                    <div className="relative inline-block text-center" ref={dropdownRef1}>
-                        <button
-                            onClick={() => setIsOpen1((prev) => !prev)}
-                            className="hover:text-green-600 text-sm"
-                        >
-                            Your Jobs
-                        </button>
-
-                        {isOpen1 && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <ul>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/job/applied" className="text-gray-700">
-                                            Saved Jobs
-                                        </Link>
-                                    </li>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/job/saved" className="text-gray-700">
-                                            Applied Jobs
-                                        </Link>
-                                    </li>
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                    <Link href="/company" className="hover:text-green-600 text-sm">
-                        <p>Company</p>
+                    <Link href="/recruiter/candidates" className="hover:text-green-600 text-sm">
+                        <p>Candidates</p>
+                    </Link>
+                    <Link href="/recruiter/saved-candidates" className="hover:text-green-600 text-sm">
+                        <p>Saved Candidates</p>
+                    </Link>
+                    <Link href="/recruiter/members" className="hover:text-green-600 text-sm">
+                        <p>Members</p>
                     </Link>
                 </nav>
 
                 <div className="flex items-center space-x-6">
-                    <Link href="/recruiter/register" className="text-black hover:text-green-600 text-sm">
-                        Bạn là nhà tuyển dụng? <span className="font-semibold">Đăng tuyển ngay</span>
-                    </Link>
                     <div className="flex space-x-4">
                         <a href="#" className="text-gray-600 hover:text-green-600">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -125,7 +71,7 @@ const CustomTopBar = () => {
                                 <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
                                     <ul>
                                         <li className="px-4 py-2 hover:bg-gray-100">
-                                            <Link href="/profile" className="text-gray-700">
+                                            <Link href="profile" className="text-gray-700">
                                                 Your Profile
                                             </Link>
                                         </li>
@@ -140,10 +86,9 @@ const CustomTopBar = () => {
                         </div>
                     </div>
                 </div>
-
             </div>
         </header>
     );
 };
 
-export default CustomTopBar;
+export default RecruiterCustomTopBar;

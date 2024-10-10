@@ -1,51 +1,40 @@
-"use client";
+
+'use client';
+
 import CustomTopBar from '@/app/common/customtopbar';
 import Footer from '@/app/common/footer';
 import SearchBar from '@/app/common/searchbar';
 import FindingJobList from '@/app/findingjoblist';
-import JobDetail from '@/app/jobdetail';
 import RelatedJob from '@/app/relatedjob';
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
+import JobDetail from './jobdetail';
 
 export default function Home() {
-
-    const [categories, setCategories] = useState([])
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchMode, setSearchMode] = useState(false);
-    const [page, setPage] = useState(0);
-    const categoriesPerPage = 8;
-    const startIdx = page * categoriesPerPage;
     const [relatedJobs, setRelatedJobs] = useState([]);
-
+    const [searchResults, setSearchResults] = useState([]);
 
     useEffect(() => {
         fetch('http://localhost:8080/api/category/get-job-amount')
-            .then(res => res.json())
-            .then(data => {
-                const filteredData = data.filter(category => category.jobs > 0);
+            .then((res) => res.json())
+            .then((data) => {
+                const filteredData = data.filter((category) => category.jobs > 0);
                 setCategories(filteredData);
             })
             .finally(() => setLoading(false));
-    }, [])
-
-
-    const [currentPage, setCurrentPage] = useState(1);
-    const jobsPerPage = 20;
-
-    const indexOfLastJob = currentPage * jobsPerPage;
-    const indexOfFirstJob = indexOfLastJob - jobsPerPage;
-
+    }, []);
 
     const handleSearch = (searchQuery) => {
         fetch(`http://localhost:8080/api/job/search?keyword=${searchQuery.keyword}`)
-            .then(res => res.json())
-            .then(data => {
+            .then((res) => res.json())
+            .then((data) => {
                 setSearchResults(data);
                 setSearchMode(true);
             });
     };
-
 
     return (
         <>
@@ -83,7 +72,7 @@ export default function Home() {
                             <>
                                 <JobDetail />
                                 <div className="max-w-7xl mx-auto p-6 text-black">
-                                    <h1 className="text-3xl font-bold mb-6 text-black-700 text-black">Việc làm liên quan</h1>
+                                    <h1 className="text-3xl font-bold mb-6 text-black-700">Việc làm liên quan</h1>
                                     <RelatedJob jobs={relatedJobs} />
                                 </div>
                                 <Footer />

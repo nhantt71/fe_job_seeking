@@ -1,6 +1,19 @@
+'use client';
 
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-const JobDetail = () => {
+export default function JobDetail() {
+    const [isSaved, setIsSaved] = useState(false);
+    const router = useRouter();
+
+    const handleSaveClick = () => {
+        setIsSaved(!isSaved);
+    };
+
+    const handleApplyClick = () => {
+        router.push('detail/apply');
+    };
 
     return (
         <div className="max-w-7xl mx-auto p-6 text-black">
@@ -15,8 +28,22 @@ const JobDetail = () => {
                                 <div>Kinh nghiệm: 1 năm</div>
                             </div>
                             <div className="space-x-2">
-                                <button className="bg-green-600 text-white py-2 px-4 rounded-lg">Ứng tuyển ngay</button>
-                                <button className="border border-green-600 text-green-600 py-2 px-4 rounded-lg">Lưu tin</button>
+                                <button
+                                    className="bg-green-600 text-white py-2 px-4 rounded-lg transition-all duration-300 ease-in-out hover:bg-green-500 hover:shadow-lg"
+                                    onClick={handleApplyClick}
+                                >
+                                    Ứng tuyển ngay
+                                </button>
+
+                                <button
+                                    className={`border py-2 px-4 rounded-lg transition-all duration-300 ease-in-out ${isSaved
+                                        ? 'border-gray-500 text-gray-500 hover:bg-gray-500 hover:text-white'
+                                        : 'border-green-600 text-green-600 hover:bg-green-600 hover:text-white'
+                                        }`}
+                                    onClick={handleSaveClick}
+                                >
+                                    {isSaved ? 'Đã lưu' : 'Lưu tin'}
+                                </button>
                             </div>
                         </div>
                         <p className="text-gray-500">Hạn nộp hồ sơ: 22/10/2024</p>
@@ -70,5 +97,3 @@ const JobDetail = () => {
         </div>
     );
 };
-
-export default JobDetail;
