@@ -1,16 +1,78 @@
+'use client';
+
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { useUserContext } from '../context/usercontext'; // Adjust the path if necessary
 
 const CustomTopBar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [isOpen1, setIsOpen1] = useState(false);
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
     const dropdownRef = useRef(null);
     const dropdownRef1 = useRef(null);
     const dropdownRef2 = useRef(null);
-    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
+    const { email, account, setUserData } = useUserContext();
+
+    // Check authentication on component mount
     useEffect(() => {
-        function handleClickOutside(event) {
+        const token = localStorage.getItem('token');
+        if (token) {
+            setIsAuthenticated(true);
+            fetchCurrentUser(token);
+        }
+    }, []);
+
+    // Fetch the current user data
+    const fetchCurrentUser = async (token) => {
+        try {
+            const res = await fetch('http://localhost:8080/api/auth/current-user', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to fetch current user');
+            }
+
+            const data = await res.json();
+            setUserData(data.username, data); // Update user context with email and account data
+
+            // If needed, fetch additional account details
+            if (data.username) {
+                fetchAccountByEmail(data.username);
+            }
+        } catch (error) {
+            console.error('Error fetching current user:', error);
+        }
+    };
+
+    // Fetch account details based on the email
+    const fetchAccountByEmail = async (email) => {
+        try {
+            const res = await fetch(`http://localhost:8080/api/auth/get-account-by-email?email=${email}`);
+            if (!res.ok) throw new Error('Failed to fetch account');
+            const data = await res.json();
+            setUserData(email, data); // Update user context with account data
+        } catch (error) {
+            console.error("Error fetching account:", error);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        setIsAuthenticated(false); // Update authentication status
+        window.location.href = '/'; // Redirect to home
+    };
+
+    // Close dropdowns when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
             if (
                 (dropdownRef.current && !dropdownRef.current.contains(event.target)) &&
                 (dropdownRef1.current && !dropdownRef1.current.contains(event.target)) &&
@@ -20,11 +82,10 @@ const CustomTopBar = () => {
                 setIsOpen1(false);
                 setIsUserMenuOpen(false);
             }
-        }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
         };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     return (
@@ -44,49 +105,34 @@ const CustomTopBar = () => {
                         <p>Recommendation Jobs</p>
                     </Link>
                     <div className="relative inline-block text-center" ref={dropdownRef}>
-                        <button
-                            onClick={() => setIsOpen((prev) => !prev)}
-                            className="hover:text-green-600 text-sm"
-                        >
+                        <button onClick={() => setIsOpen((prev) => !prev)} className="hover:text-green-600 text-sm">
                             Profile & CV
                         </button>
                         {isOpen && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
                                 <ul>
                                     <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/profile" className="text-gray-700">
-                                            Profile
-                                        </Link>
+                                        <Link href="/profile" className="text-gray-700">Profile</Link>
                                     </li>
                                     <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/cv" className="text-gray-700">
-                                            CV
-                                        </Link>
+                                        <Link href="/cv" className="text-gray-700">CV</Link>
                                     </li>
                                 </ul>
                             </div>
                         )}
                     </div>
                     <div className="relative inline-block text-center" ref={dropdownRef1}>
-                        <button
-                            onClick={() => setIsOpen1((prev) => !prev)}
-                            className="hover:text-green-600 text-sm"
-                        >
+                        <button onClick={() => setIsOpen1((prev) => !prev)} className="hover:text-green-600 text-sm">
                             Your Jobs
                         </button>
-
                         {isOpen1 && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
                                 <ul>
                                     <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/job/applied" className="text-gray-700">
-                                            Saved Jobs
-                                        </Link>
+                                        <Link href="/job/saved" className="text-gray-700">Saved Jobs</Link>
                                     </li>
                                     <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/job/saved" className="text-gray-700">
-                                            Applied Jobs
-                                        </Link>
+                                        <Link href="/job/applied" className="text-gray-700">Applied Jobs</Link>
                                     </li>
                                 </ul>
                             </div>
@@ -102,45 +148,31 @@ const CustomTopBar = () => {
                         Bạn là nhà tuyển dụng? <span className="font-semibold">Đăng tuyển ngay</span>
                     </Link>
                     <div className="flex space-x-4">
-                        <a href="#" className="text-gray-600 hover:text-green-600">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a7.002 7.002 0 00-6-6.917V3a2 2 0 10-4 0v1.083A7.002 7.002 0 002 11v3.158c0 .538-.214 1.055-.595 1.437L0 17h5m4 0v2a2 2 0 104 0v-2m-4 0h4"></path>
-                            </svg>
-                        </a>
-                        <a href="#" className="text-gray-600 hover:text-green-600">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v-2a7 7 0 00-14 0v2m14 0a5 5 0 01-10 0m10 0v5a2 2 0 11-4 0v-5m4 0H5"></path>
-                            </svg>
-                        </a>
-                        <div className="relative" ref={dropdownRef2}>
-                            <button onClick={() => setIsUserMenuOpen((prev) => !prev)} className="flex items-center space-x-2 focus:outline-none">
-                                <img
-                                    className="h-8 w-8 rounded-full"
-                                    src="https://res.cloudinary.com/dsp3ymism/image/upload/v1727003509/wmxpdyr6oftjnzcyrusr.jpg"
-                                    alt="User Profile"
-                                />
-                            </button>
-
-                            {isUserMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                    <ul>
-                                        <li className="px-4 py-2 hover:bg-gray-100">
-                                            <Link href="/profile" className="text-gray-700">
-                                                Your Profile
-                                            </Link>
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100">
-                                            <button className="text-gray-700" onClick={() => alert('Logout functionality goes here!')}>
-                                                Logout
-                                            </button>
-                                        </li>
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
+                        {isAuthenticated ? (
+                            <div className="relative" ref={dropdownRef2}>
+                                <button onClick={() => setIsUserMenuOpen((prev) => !prev)} className="flex items-center space-x-2 focus:outline-none">
+                                    <img className="h-8 w-8 rounded-full" src={account?.avatar} alt="User Profile" />
+                                </button>
+                                {isUserMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
+                                        <ul>
+                                            <li className="px-4 py-2 hover:bg-gray-100">
+                                                <Link href="/profile" className="text-gray-700">Your Profile</Link>
+                                            </li>
+                                            <li className="px-4 py-2 hover:bg-gray-100">
+                                                <button className="text-gray-700" onClick={handleLogout}>Logout</button>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <Link href="/candidate/login" className="hover:text-green-600 text-sm text-black">
+                                Login Here
+                            </Link>
+                        )}
                     </div>
                 </div>
-
             </div>
         </header>
     );

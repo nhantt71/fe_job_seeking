@@ -1,3 +1,6 @@
+'use client';
+
+import { useUserContext } from '@/app/context/usercontext';
 import Link from 'next/link';
 import { useState } from "react";
 
@@ -5,10 +8,37 @@ export default function ChangePassword() {
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const { email, account, setUserData } = useUserContext();
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Add your password change logic here
+
+        if (newPassword !== confirmPassword) {
+            alert("New password and confirm password do not match.");
+            return;
+        }
+
+        fetch(`http://localhost:8080/api/auth/change-password?accountId=${account.id}&newPassword=${newPassword}&oldPassword=${oldPassword}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return res.json();
+        })
+        .then(data => {
+            setUserData(data.email, data);
+            alert('Password changed successfully!');
+            router.push('/profile');
+        })
+        .catch(error => {
+            console.error('Error changing password:', error);
+            alert('Failed to change password. Please check your input and try again.');
+        });
     };
 
     return (

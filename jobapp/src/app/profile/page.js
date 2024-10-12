@@ -8,6 +8,7 @@ import YourProfile from './yourprofile';
 export default function Home() {
     const [loading, setLoading] = useState(false);
 
+
     return (
         <>
             <CustomTopBar />

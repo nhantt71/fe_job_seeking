@@ -1,11 +1,13 @@
-'use client'
+'use client';
 
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { useEffect, useState } from 'react';
 
 function JobList() {
     const [jobs, setJobs] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const jobsPerPage = 12;
+    const router = useRouter();
 
     useEffect(() => {
         fetch('http://localhost:8080/api/job')
@@ -28,20 +30,28 @@ function JobList() {
         }
     };
 
+    const handleJobClick = (id) => {
+        router.push(`/job/detail?id=${id}`);
+    };
+
     return (
         <div className="mt-4 container mx-auto">
             <h1 className="text-3xl font-bold mb-8 text-black">Việc làm đang tuyển dụng</h1>
             <div className="grid grid-cols-3 gap-4">
                 {currentJobs.map(job => (
-                    <div key={job.id} className="bg-white shadow-md rounded px-4 py-6">
+                    <div
+                        key={job.id}
+                        className="bg-white shadow-md rounded px-4 py-6 cursor-pointer transition transform hover:scale-105 hover:shadow-lg"
+                        onClick={() => handleJobClick(job.id)}
+                    >
                         <div className="flex">
                             <div>
                                 <img src={job.company.logo} alt={job.company.name} className="w-16 h-16 mr-4" />
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-black">{job.name}</h3>
-                                <p className="text-gray-700 text-black">{job.company.name}</p>
-                                <p className="text-gray-500 text-black">{job.salary} VND</p>
+                                <p className="text-gray-700">{job.company.name}</p>
+                                <p className="text-gray-500">{job.salary} VND</p>
                             </div>
                         </div>
                     </div>

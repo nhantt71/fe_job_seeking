@@ -1,6 +1,6 @@
 const CompanyList = ({ company }) => {
     return (
-        <div className="bg-white p-4 rounded-lg shadow-md">
+        <div className="bg-white p-4 rounded-lg shadow-md text-black">
             <div className="flex justify-center mb-4">
                 <img
                     src={company.logo}

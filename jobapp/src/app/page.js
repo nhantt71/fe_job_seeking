@@ -46,7 +46,6 @@ export default function Home() {
       .then(data => {
         localStorage.setItem('searchResults', JSON.stringify(data));
         setSearchMode(true);
-
         router.push('/job');
       });
   };
