@@ -1,31 +1,16 @@
-import { useRouter } from 'next/navigation';
+'use client';
+
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useRecruiterContext } from '../context/recruitercontext';
 
 export default function JobsManagement() {
-    const [jobs, setJobs] = useState([
-        {
-            id: 1,
-            name: "Frontend Developer",
-            detail: "Develop and maintain the front-end of our website.",
-            experience: "2+ years",
-            salary: "$100k/year",
-            category: "Development",
-            endDate: "2024-12-31",
-            enable: false,
-        },
-        {
-            id: 2,
-            name: "Backend Developer",
-            detail: "Build APIs and handle server-side logic.",
-            experience: "3+ years",
-            salary: "$120k/year",
-            category: "Development",
-            endDate: "2024-10-15",
-            enable: true,
-        },
-    ]);
+    const searchParams = useSearchParams();
+    const id = searchParams.get('id');
 
+    const [jobs, setJobs] = useState([]);
     const [categories, setCategories] = useState([]);
+    const { recruiter } = useRecruiterContext();
     const [newJob, setNewJob] = useState({
         name: '',
         detail: '',
@@ -33,75 +18,234 @@ export default function JobsManagement() {
         salary: '',
         category: '',
         endDate: '',
-        enable: false,
+        enable: true
     });
+
+    useEffect(() => {
+        if (recruiter?.companyId) {
+            fetchAllJobs(recruiter?.companyId);
+        }
+    }, [recruiter?.companyId]);
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingJob, setEditingJob] = useState(null);
+    const [categoryNames, setCategoryNames] = useState({});
     const router = useRouter();
+    const [successMessage, setSuccessMessage] = useState('');
+    const [deleteSuccessMessage, setDeleteSuccessMessage] = useState('');
 
-    // Hàm gọi API để lấy danh sách category
     const fetchCategories = async () => {
         try {
-            const response = await fetch('/api/categories'); // Thay thế với API thực tế của bạn
+            const response = await fetch('http://localhost:8080/api/category');
             const data = await response.json();
-            setCategories(data); // Giả định API trả về mảng các category
+            const names = {};
+            data.forEach((category) => {
+                names[category.id] = category.name;
+            });
+            setCategoryNames(names);
+            setCategories(data);
         } catch (error) {
             console.error("Error fetching categories:", error);
         }
     };
 
+    const fetchAllJobs = async (id) => {
+        try {
+            const res = await fetch(`http://localhost:8080/api/job/get-job-by-company-id/${id}`);
+            if (!res.ok) throw new Error('Failed to fetch jobs');
+            const data = await res.json();
+            setJobs(data);
+        } catch (error) {
+            console.error('Error fetching jobs:', error);
+        }
+    };
+
+    const fetchJobById = async (jobId) => {
+        try {
+            const res = await fetch(`http://localhost:8080/api/job/get-job-by-id/${jobId}`);
+            if (!res.ok) throw new Error('Failed to fetch job');
+            const data = await res.json();
+            setEditingJob({ ...data, category: data.category.id });
+            setIsEditing(true);
+        } catch (error) {
+            console.error('Error fetching job:', error);
+        }
+    };
+
+    useEffect(() => {
+        if (id) {
+            fetchJobById(id);
+        } else {
+            setIsEditing(false);
+            setEditingJob(null);
+            setNewJob({ name: '', detail: '', experience: '', salary: '', category: '', endDate: '', enable: true });
+        }
+    }, [id]);
+
     useEffect(() => {
         fetchCategories();
     }, []);
 
-    // Hàm xử lý form
     const handleChange = (e) => {
         const { name, value } = e.target;
         setNewJob((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handlePost = () => {
-        setJobs((prev) => [...prev, { ...newJob, id: jobs.length + 1 }]);
-        setNewJob({ name: '', detail: '', experience: '', salary: '', category: '', endDate: '', enable: false });
+    const handlePost = async () => {
+        try {
+            const recruiterId = recruiter?.id;
+            const companyId = recruiter?.companyId;
+
+            const response = await fetch(`http://localhost:8080/api/job/create`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    name: newJob.name,
+                    detail: newJob.detail,
+                    experience: newJob.experience,
+                    salary: newJob.salary,
+                    categoryId: newJob.category,
+                    recruiterId: recruiterId,
+                    companyId: companyId,
+                    endDate: newJob.endDate,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Error creating job");
+            }
+
+            const successMessage = await response.text();
+            const createdJob = { ...newJob, id: Date.now(), category: newJob.category };
+            setJobs((prev) => [...prev, createdJob]);
+            setSuccessMessage(successMessage);
+            setNewJob({ name: '', detail: '', experience: '', salary: '', category: '', endDate: '', enable: true });
+        } catch (error) {
+            console.error("Error creating job:", error);
+        }
     };
 
     const handleEdit = (job) => {
-        setIsEditing(true);
-        setEditingJob(job);
-    };
-
-    const handleUpdate = () => {
-        setJobs((prev) =>
-            prev.map((job) =>
-                job.id === editingJob.id ? editingJob : job
-            )
-        );
-        setIsEditing(false);
-        setEditingJob(null);
-    };
-
-    const handleDelete = (id) => {
-        setJobs((prev) => prev.filter((job) => job.id !== id));
-    };
-
-    const handlePublish = (id) => {
-        setJobs((prev) =>
-            prev.map((job) =>
-                job.id === id ? { ...job, enable: !job.enable } : job
-            )
-        );
+        router.push(`/recruiter/jobs-management?id=${job.id}`);
     };
 
     const handleView = (id) => {
-        router.push(`/job/${id}`);
+        router.push(`/recruiter/jobs-management?id=${id}`);
+    };
+
+    const handleUpdate = async () => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/job/edit/${editingJob.id}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    name: editingJob.name,
+                    detail: editingJob.detail,
+                    experience: editingJob.experience,
+                    salary: editingJob.salary,
+                    categoryId: editingJob.category,
+                    endDate: editingJob.endDate
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Error updating job");
+            }
+
+            const updatedJob = await response.json();
+            setJobs((prev) =>
+                prev.map((job) => (job.id === updatedJob.id ? updatedJob : job))
+            );
+            setIsEditing(false);
+            setEditingJob(null);
+            setSuccessMessage('Job updated successfully!');
+            router.push('/recruiter/jobs-management');
+        } catch (error) {
+            console.error("Error updating job:", error);
+        }
+    };
+
+    const handleDelete = async (jobId) => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/job/delete/${jobId}`, {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                throw new Error("Error deleting job");
+            }
+
+            setJobs((prev) => prev.filter((job) => job.id !== jobId));
+            setDeleteSuccessMessage('Job deleted successfully!');
+        } catch (error) {
+            console.error("Error deleting job:", error);
+        }
+    };
+
+    const handlePublish = async (jobId) => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/job/publish/${jobId}`, {
+                method: "POST",
+            });
+
+            if (!response.ok) {
+                throw new Error("Error publishing job");
+            }
+
+            const message = await response.text();
+            setSuccessMessage(message);
+            setJobs((prev) =>
+                prev.map((job) =>
+                    job.id === jobId ? { ...job, enable: true } : job
+                )
+            );
+        } catch (error) {
+            console.error("Error publishing job:", error);
+        }
+    };
+
+    const handleUnpublish = async (jobId) => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/job/unpublish/${jobId}`, {
+                method: "POST",
+            });
+
+            if (!response.ok) {
+                throw new Error("Error unpublishing job");
+            }
+
+            const message = await response.text();
+            setSuccessMessage(message);
+            setJobs((prev) =>
+                prev.map((job) =>
+                    job.id === jobId ? { ...job, enable: false } : job
+                )
+            );
+        } catch (error) {
+            console.error("Error unpublishing job:", error);
+        }
     };
 
     return (
         <div className="container mx-auto p-6 text-black">
             <h1 className="text-2xl font-bold mb-6">Jobs Management</h1>
 
-            {/* Form tạo mới hoặc chỉnh sửa job */}
+            {successMessage && (
+                <div className="bg-green-500 text-white p-4 rounded mb-4">
+                    {successMessage}
+                </div>
+            )}
+
+            {deleteSuccessMessage && (
+                <div className="bg-red-500 text-white p-4 rounded mb-4">
+                    {deleteSuccessMessage}
+                </div>
+            )}
+
             <div className="bg-white shadow-md rounded p-6 mb-6">
                 <h2 className="text-xl font-bold mb-4">{isEditing ? "Edit Job" : "Create Job"}</h2>
 
@@ -110,7 +254,7 @@ export default function JobsManagement() {
                         <input
                             type="text"
                             name="name"
-                            value={isEditing ? editingJob.name : newJob.name}
+                            value={isEditing ? editingJob?.name : newJob.name}
                             onChange={(e) =>
                                 isEditing
                                     ? setEditingJob({ ...editingJob, name: e.target.value })
@@ -122,7 +266,7 @@ export default function JobsManagement() {
                         <input
                             type="text"
                             name="experience"
-                            value={isEditing ? editingJob.experience : newJob.experience}
+                            value={isEditing ? editingJob?.experience : newJob.experience}
                             onChange={(e) =>
                                 isEditing
                                     ? setEditingJob({ ...editingJob, experience: e.target.value })
@@ -134,7 +278,7 @@ export default function JobsManagement() {
                         <input
                             type="text"
                             name="salary"
-                            value={isEditing ? editingJob.salary : newJob.salary}
+                            value={isEditing ? editingJob?.salary : newJob.salary}
                             onChange={(e) =>
                                 isEditing
                                     ? setEditingJob({ ...editingJob, salary: e.target.value })
@@ -143,30 +287,30 @@ export default function JobsManagement() {
                             placeholder="Salary"
                             className="border p-2 rounded"
                         />
-                        
-                        {/* Spinner cho Category */}
                         <select
                             name="category"
-                            value={isEditing ? editingJob.category : newJob.category}
-                            onChange={(e) =>
-                                isEditing
-                                    ? setEditingJob({ ...editingJob, category: e.target.value })
-                                    : handleChange(e)
-                            }
+                            value={isEditing ? editingJob?.category : newJob.category}
+                            onChange={(e) => {
+                                const selectedCategoryId = e.target.value;
+                                if (isEditing) {
+                                    setEditingJob({ ...editingJob, category: selectedCategoryId });
+                                } else {
+                                    setNewJob((prev) => ({ ...prev, category: selectedCategoryId }));
+                                }
+                            }}
                             className="border p-2 rounded"
                         >
                             <option value="">Select Category</option>
                             {categories.map((category) => (
-                                <option key={category.id} value={category.name}>
+                                <option key={category.id} value={category.id}>
                                     {category.name}
                                 </option>
                             ))}
                         </select>
-                        
                         <input
                             type="date"
                             name="endDate"
-                            value={isEditing ? editingJob.endDate : newJob.endDate}
+                            value={isEditing ? editingJob?.endDate : newJob.endDate}
                             onChange={(e) =>
                                 isEditing
                                     ? setEditingJob({ ...editingJob, endDate: e.target.value })
@@ -176,7 +320,7 @@ export default function JobsManagement() {
                         />
                         <textarea
                             name="detail"
-                            value={isEditing ? editingJob.detail : newJob.detail}
+                            value={isEditing ? editingJob?.detail : newJob.detail}
                             onChange={(e) =>
                                 isEditing
                                     ? setEditingJob({ ...editingJob, detail: e.target.value })
@@ -193,10 +337,21 @@ export default function JobsManagement() {
                     >
                         {isEditing ? "Update" : "Post Job"}
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsEditing(false);
+                            setEditingJob(null);
+                            setNewJob({ name: '', detail: '', experience: '', salary: '', category: '', endDate: '', enable: true });
+                            router.push('/recruiter/jobs-management');
+                        }}
+                        className="mt-4 ml-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                    >
+                        Cancel
+                    </button>
                 </form>
             </div>
 
-            {/* Danh sách các công việc */}
             <div className="bg-white shadow-md rounded p-6">
                 <h2 className="text-xl font-bold mb-4">Job List</h2>
                 <ul>
@@ -205,15 +360,13 @@ export default function JobsManagement() {
                             <h3 className="text-lg font-bold">{job.name}</h3>
                             <p>Experience: {job.experience}</p>
                             <p>Salary: {job.salary}</p>
-                            <p>Category: {job.category}</p>
+                            <p>Category: {categoryNames[job.categoryId] || 'Unknown'}</p>
                             <p>End Date: {job.endDate}</p>
 
                             <div className="flex gap-2 mt-2">
                                 <button
-                                    onClick={() => handlePublish(job.id)}
-                                    className={`px-4 py-2 rounded ${
-                                        job.enable ? "bg-green-500" : "bg-gray-500"
-                                    } text-white`}
+                                    onClick={() => job.enable ? handleUnpublish(job.id) : handlePublish(job.id)}
+                                    className={`px-4 py-2 rounded ${job.enable ? "bg-green-500" : "bg-gray-500"} text-white`}
                                 >
                                     {job.enable ? "Published" : "Publish"}
                                 </button>

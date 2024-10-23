@@ -1,29 +1,103 @@
-import { useState } from 'react';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRecruiterContext } from '../context/recruitercontext';
+import { useUserContext } from '../context/usercontext';
 
 export default function MyCompany() {
-    // State cho dữ liệu công ty
-    const [company, setCompany] = useState({
-        email: "company@example.com",
-        information: "This is a leading tech company providing various services...",
-        logo: "https://via.placeholder.com/100",
-        name: "Tech Innovators Ltd.",
-        phoneNumber: "123-456-7890",
-        website: "https://techinnovators.com",
-        addressDetail: "1234 Silicon Valley",
-        city: "San Francisco",
-        province: "California",
-        createdBy: "John Doe"
-    });
-
-    // State cho việc chỉnh sửa
+    const { account } = useUserContext();
+    const [company, setCompany] = useState(null);
+    const [jobs, setJobs] = useState([]);
     const [editable, setEditable] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const { recruiter } = useRecruiterContext();
+    const jobsPerPage = 5;
+    const [createdRecruiter, setCreatedRecruiter] = useState(null);
+    const [logoFile, setLogoFile] = useState(null);
 
-    // Hàm cập nhật dữ liệu sau khi chỉnh sửa
-    const handleUpdate = () => {
-        setEditable(false); // Tắt chế độ chỉnh sửa sau khi cập nhật
+    useEffect(() => {
+        if (recruiter?.companyId) {
+            fetchCompanyData(recruiter?.companyId);
+            fetchPublishedJobs(recruiter?.companyId);
+        }
+    }, [recruiter?.companyId]);
+
+    useEffect(() => {
+        if (company?.createdRecruiterId) {
+            fetchCreatedRecruiter(company?.createdRecruiterId);
+        }
+    }, [company?.createdRecruiterId]);
+
+    useEffect(() => {
+        if (account?.role === 'super recruiter') {
+            setEditable(false);
+        }
+    }, [account]);
+
+    const fetchCreatedRecruiter = async (id) => {
+        try {
+            const res = await fetch(`http://localhost:8080/api/recruiter/get-recruiter/${id}`);
+            if (!res.ok) throw new Error('Failed to fetch recruiter');
+            const data = await res.json();
+            setCreatedRecruiter(data);
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    // Hàm thay đổi thông tin công ty
+    const fetchCompanyData = async (id) => {
+        try {
+            const res = await fetch(`http://localhost:8080/api/company/get-company-by-id/${id}`);
+            if (!res.ok) throw new Error('Failed to fetch company data');
+            const data = await res.json();
+            setCompany(data);
+        } catch (error) {
+            console.error('Error fetching company data:', error);
+        }
+    };
+
+    const fetchPublishedJobs = async (id) => {
+        try {
+            const res = await fetch(`http://localhost:8080/api/job/get-published-jobs-by-company-id/${id}`);
+            if (!res.ok) throw new Error('Failed to fetch jobs');
+            const data = await res.json();
+            setJobs(data);
+        } catch (error) {
+            console.error('Error fetching jobs:', error);
+        }
+    };
+
+    const handleUpdate = async () => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/company/edit/${company.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    name: company.name,
+                    email: company.email,
+                    phoneNumber: company.phoneNumber,
+                    website: company.website,
+                    information: company.information,
+                    detail: company.addressDetail,
+                    city: company.city,
+                    province: company.province,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update company');
+            }
+
+            await fetchCompanyData(company.id);
+            setEditable(false);
+
+        } catch (error) {
+            console.error('Error updating company:', error);
+        }
+    };
+
     const handleChange = (e) => {
         setCompany({
             ...company,
@@ -31,28 +105,36 @@ export default function MyCompany() {
         });
     };
 
-    // State cho danh sách công việc
-    const [jobs, setJobs] = useState([
-        { id: 1, title: "Frontend Developer", location: "San Francisco, CA", salary: "$100k/year" },
-        { id: 2, title: "Backend Developer", location: "New York, NY", salary: "$120k/year" },
-        { id: 3, title: "DevOps Engineer", location: "Austin, TX", salary: "$110k/year" },
-        { id: 4, title: "Product Manager", location: "Los Angeles, CA", salary: "$130k/year" },
-        { id: 5, title: "UX/UI Designer", location: "Seattle, WA", salary: "$90k/year" },
-        { id: 6, title: "Data Scientist", location: "Chicago, IL", salary: "$150k/year" },
-        { id: 7, title: "Mobile App Developer", location: "Boston, MA", salary: "$115k/year" },
-        { id: 8, title: "AI Engineer", location: "Miami, FL", salary: "$160k/year" }
-    ]);
+    const handleLogoChange = (e) => {
+        setLogoFile(e.target.files[0]); // Set the selected file to state
+    };
 
-    // State cho trang hiện tại của công việc
-    const [currentPage, setCurrentPage] = useState(1);
-    const jobsPerPage = 5;
+    const handleLogoUpload = async () => {
+        if (!logoFile) return;
 
-    // Tính toán công việc hiển thị trên trang hiện tại
+        const formData = new FormData();
+        formData.append('file', logoFile);
+        formData.append('id', company.id);
+
+        try {
+            const res = await fetch('http://localhost:8080/api/company/change-logo', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!res.ok) throw new Error('Failed to upload logo');
+
+            const updatedCompany = await res.json();
+            setCompany(updatedCompany); // Update company data with the new logo
+        } catch (err) {
+            console.error('Error uploading logo:', err);
+        }
+    };
+
     const indexOfLastJob = currentPage * jobsPerPage;
     const indexOfFirstJob = indexOfLastJob - jobsPerPage;
     const currentJobs = jobs.slice(indexOfFirstJob, indexOfLastJob);
 
-    // Hàm chuyển trang
     const nextPage = () => {
         if (indexOfLastJob < jobs.length) {
             setCurrentPage(currentPage + 1);
@@ -65,19 +147,33 @@ export default function MyCompany() {
         }
     };
 
+    if (!company) {
+        return <div>Loading...</div>;
+    }
+
     return (
         <div className="bg-gray-100 min-h-screen py-6 text-black">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="bg-white shadow-md rounded-lg p-6">
                     <h1 className="text-2xl font-bold text-gray-800 mb-6">My Company</h1>
 
-                    {/* Logo */}
                     <div className="flex items-center mb-4">
                         <img
                             src={company.logo}
                             alt="Company Logo"
                             className="w-24 h-24 rounded-full mr-6 object-cover"
                         />
+                        {editable && (
+                            <div>
+                                <input type="file" onChange={handleLogoChange} className="mt-2" />
+                                <button
+                                    onClick={handleLogoUpload}
+                                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mt-2"
+                                >
+                                    Upload New Logo
+                                </button>
+                            </div>
+                        )}
                         <div>
                             {editable ? (
                                 <input
@@ -104,9 +200,8 @@ export default function MyCompany() {
                         </div>
                     </div>
 
-                    {/* Thông tin công ty */}
+                    {/* Editable fields */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Email */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
                             <h3 className="text-sm font-medium text-gray-600">Email</h3>
                             {editable ? (
@@ -122,7 +217,6 @@ export default function MyCompany() {
                             )}
                         </div>
 
-                        {/* Số điện thoại */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
                             <h3 className="text-sm font-medium text-gray-600">Phone Number</h3>
                             {editable ? (
@@ -138,7 +232,6 @@ export default function MyCompany() {
                             )}
                         </div>
 
-                        {/* Địa chỉ chi tiết */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
                             <h3 className="text-sm font-medium text-gray-600">Detail of Address</h3>
                             {editable ? (
@@ -154,7 +247,6 @@ export default function MyCompany() {
                             )}
                         </div>
 
-                        {/* Thành phố */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
                             <h3 className="text-sm font-medium text-gray-600">City</h3>
                             {editable ? (
@@ -170,7 +262,6 @@ export default function MyCompany() {
                             )}
                         </div>
 
-                        {/* Tỉnh/Bang */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
                             <h3 className="text-sm font-medium text-gray-600">Province</h3>
                             {editable ? (
@@ -186,13 +277,11 @@ export default function MyCompany() {
                             )}
                         </div>
 
-                        {/* Người tạo công ty */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
                             <h3 className="text-sm font-medium text-gray-600">Created By</h3>
-                            <p className="text-gray-800 mt-1">{company.createdBy}</p>
+                            <p className="text-gray-800 mt-1">{createdRecruiter?.fullname}</p>
                         </div>
 
-                        {/* Thông tin công ty */}
                         <div className="bg-gray-50 p-4 rounded-lg shadow-sm md:col-span-2">
                             <h3 className="text-sm font-medium text-gray-600">Company Information</h3>
                             {editable ? (
@@ -208,7 +297,6 @@ export default function MyCompany() {
                         </div>
                     </div>
 
-                    {/* Nút Update hoặc Edit */}
                     <div className="mt-6">
                         {editable ? (
                             <button
@@ -227,20 +315,22 @@ export default function MyCompany() {
                         )}
                     </div>
 
-                    {/* Danh sách công việc đã published */}
                     <div className="mt-10">
                         <h2 className="text-xl font-bold text-gray-800 mb-4">Published Jobs</h2>
                         <ul>
                             {currentJobs.map((job) => (
-                                <li key={job.id} className="bg-gray-50 p-4 mb-4 rounded-lg shadow-sm">
-                                    <h3 className="text-lg font-semibold text-gray-700">{job.title}</h3>
-                                    <p className="text-sm text-gray-500">{job.location}</p>
+                                <li
+                                    key={job.id}
+                                    className="bg-gray-50 p-4 mb-4 rounded-lg shadow-sm hover:bg-gray-200 cursor-pointer"
+                                    onClick={() => window.location.href = `/recruiter/jobs-management?id=${job.id}`}
+                                >
+                                    <h3 className="text-lg font-semibold text-gray-700">{job.name}</h3>
+                                    <p className="text-sm text-gray-500">{job.address}</p>
                                     <p className="text-sm text-gray-500">{job.salary}</p>
                                 </li>
                             ))}
                         </ul>
 
-                        {/* Nút chuyển trang */}
                         <div className="flex justify-between mt-4">
                             <button
                                 onClick={prevPage}

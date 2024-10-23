@@ -12,7 +12,7 @@ export default function JobDetail() {
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
 
-    const { email, account } = useUserContext(); // Lấy email và account từ UserContext
+    const { email, account } = useUserContext();
     const [candidate, setCandidate] = useState(null);
 
     // Lấy thông tin ứng viên

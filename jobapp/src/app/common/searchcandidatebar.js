@@ -6,7 +6,9 @@ const SearchCandidateBar = ({ onSearch }) => {
         gender: '',
         skill: '',
         language: '',
-        employmentStatus: ''
+        education: '',
+        certification: '',
+        goal: ''
     });
 
     const handleChange = (e) => {
@@ -18,39 +20,32 @@ const SearchCandidateBar = ({ onSearch }) => {
     };
 
     const handleSearch = () => {
-        onSearch(filters); // Gọi hàm onSearch với các bộ lọc
+        onSearch(filters);
     };
 
     return (
         <div className="bg-white shadow-md rounded-lg p-6 mb-6 text-black">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Search Candidates</h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Kinh nghiệm */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Experience</label>
-                    <select
+                    <input
+                        type="text"
                         name="experience"
                         value={filters.experience}
                         onChange={handleChange}
-                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        <option value="">Select Experience</option>
-                        <option value="fresher">Fresher</option>
-                        <option value="1-3 years">1-3 Years</option>
-                        <option value="3-5 years">3-5 Years</option>
-                        <option value="5+ years">5+ Years</option>
-                    </select>
+                        placeholder="Enter experience"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
+                    />
                 </div>
 
-                {/* Giới tính */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
                     <select
                         name="gender"
                         value={filters.gender}
                         onChange={handleChange}
-                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
                     >
                         <option value="">Select Gender</option>
                         <option value="male">Male</option>
@@ -59,7 +54,6 @@ const SearchCandidateBar = ({ onSearch }) => {
                     </select>
                 </div>
 
-                {/* Kỹ năng */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Skill</label>
                     <input
@@ -68,11 +62,10 @@ const SearchCandidateBar = ({ onSearch }) => {
                         value={filters.skill}
                         onChange={handleChange}
                         placeholder="Enter skill"
-                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
                     />
                 </div>
 
-                {/* Ngôn ngữ */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
                     <input
@@ -81,30 +74,51 @@ const SearchCandidateBar = ({ onSearch }) => {
                         value={filters.language}
                         onChange={handleChange}
                         placeholder="Enter language"
-                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
                     />
                 </div>
 
-                {/* Tình trạng làm việc */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Employment Status</label>
-                    <select
-                        name="employmentStatus"
-                        value={filters.employmentStatus}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Education</label>
+                    <input
+                        type="text"
+                        name="education"
+                        value={filters.education}
                         onChange={handleChange}
-                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        <option value="">Select Employment Status</option>
-                        <option value="available">Available</option>
-                        <option value="not available">Not Available</option>
-                    </select>
+                        placeholder="Enter education"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Certification</label>
+                    <input
+                        type="text"
+                        name="certification"
+                        value={filters.certification}
+                        onChange={handleChange}
+                        placeholder="Enter certification"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Goal</label>
+                    <input
+                        type="text"
+                        name="goal"
+                        value={filters.goal}
+                        onChange={handleChange}
+                        placeholder="Enter career goal"
+                        className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md"
+                    />
                 </div>
             </div>
 
             <div className="mt-6 flex justify-center">
                 <button
                     onClick={handleSearch}
-                    className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-md shadow hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-md shadow hover:bg-blue-600"
                 >
                     Search
                 </button>

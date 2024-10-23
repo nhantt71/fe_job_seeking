@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { useUserContext } from '../context/usercontext'; // Adjust the path if necessary
+import { useUserContext } from '../context/usercontext';
 
 const CustomTopBar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -16,7 +16,6 @@ const CustomTopBar = () => {
 
     const { email, account, setUserData } = useUserContext();
 
-    // Check authentication on component mount
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
@@ -25,7 +24,7 @@ const CustomTopBar = () => {
         }
     }, []);
 
-    // Fetch the current user data
+
     const fetchCurrentUser = async (token) => {
         try {
             const res = await fetch('http://localhost:8080/api/auth/current-user', {
@@ -41,9 +40,8 @@ const CustomTopBar = () => {
             }
 
             const data = await res.json();
-            setUserData(data.username, data); // Update user context with email and account data
+            setUserData(data.username, data);
 
-            // If needed, fetch additional account details
             if (data.username) {
                 fetchAccountByEmail(data.username);
             }
@@ -52,13 +50,12 @@ const CustomTopBar = () => {
         }
     };
 
-    // Fetch account details based on the email
     const fetchAccountByEmail = async (email) => {
         try {
             const res = await fetch(`http://localhost:8080/api/auth/get-account-by-email?email=${email}`);
             if (!res.ok) throw new Error('Failed to fetch account');
             const data = await res.json();
-            setUserData(email, data); // Update user context with account data
+            setUserData(email, data);
         } catch (error) {
             console.error("Error fetching account:", error);
         }
@@ -66,11 +63,11 @@ const CustomTopBar = () => {
 
     const handleLogout = () => {
         localStorage.removeItem('token');
-        setIsAuthenticated(false); // Update authentication status
-        window.location.href = '/'; // Redirect to home
+        setIsAuthenticated(false);
+        window.location.href = '/';
     };
 
-    // Close dropdowns when clicking outside
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (
