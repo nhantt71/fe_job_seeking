@@ -1,23 +1,65 @@
 import { useEffect, useState } from 'react';
 import SearchCandidateBar from '../common/searchcandidatebar';
+import { useRecruiterContext } from '../context/recruitercontext';
 
 const CandidatesList = () => {
     const [candidates, setCandidates] = useState([]);
     const [filteredCandidates, setFilteredCandidates] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [companyId, setCompanyId] = useState();
+    const { recruiter } = useRecruiterContext();
 
     useEffect(() => {
         fetchAvailableCandidates();
     }, []);
 
+    useEffect(() =>{
+        if(recruiter?.companyId){
+            setCompanyId(recruiter?.companyId);
+        }
+    }, [recruiter?.companyId])
+
     const fetchAvailableCandidates = async () => {
         try {
             const response = await fetch('http://localhost:8080/api/candidate/get-available-candidates');
             const data = await response.json();
-            setCandidates(data);
+
+            const candidatesWithStatus = await Promise.all(
+                data.map(async (candidate) => {
+                    const isSaved = await fetchSavedStatus(candidate.id);
+                    return { ...candidate, isSaved };
+                })
+            );
+
+            setCandidates(candidatesWithStatus);
             setIsSearching(false);
         } catch (error) {
             console.error('Error fetching candidates:', error);
+        }
+    };
+
+    const fetchSavedStatus = async (candidateId) => {
+        try {
+            const response = await fetch(
+                `http://localhost:8080/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
+            );
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching saved status:', error);
+            return false;
+        }
+    };
+
+    const handleSaveToggle = async (candidateId, isCurrentlySaved) => {
+        const url = isCurrentlySaved
+            ? `http://localhost:8080/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
+            : `http://localhost:8080/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
+
+        try {
+            await fetch(url, { method: 'POST' });
+            fetchAvailableCandidates();
+        } catch (error) {
+            console.error('Error toggling save status:', error);
         }
     };
 
@@ -41,7 +83,14 @@ const CandidatesList = () => {
                     });
 
                     const detailedCandidates = await detailedResponse.json();
-                    setFilteredCandidates(detailedCandidates);
+                    const candidatesWithStatus = await Promise.all(
+                        detailedCandidates.map(async (candidate) => {
+                            const isSaved = await fetchSavedStatus(candidate.id);
+                            return { ...candidate, isSaved };
+                        })
+                    );
+
+                    setFilteredCandidates(candidatesWithStatus);
                     setIsSearching(true);
                 } else {
                     setFilteredCandidates([]);
@@ -51,15 +100,6 @@ const CandidatesList = () => {
                 console.error('Error searching candidates:', error);
             }
         }
-    };
-
-
-    const toggleSave = (id) => {
-        setCandidates((prevCandidates) =>
-            prevCandidates.map((candidate) =>
-                candidate.id === id ? { ...candidate, isSaved: !candidate.isSaved } : candidate
-            )
-        );
     };
 
     const displayCandidates = isSearching ? filteredCandidates : candidates;
@@ -96,7 +136,7 @@ const CandidatesList = () => {
                                     View CV
                                 </button>
                                 <button
-                                    onClick={() => toggleSave(candidate.id)}
+                                    onClick={() => handleSaveToggle(candidate.id, candidate.isSaved)}
                                     className={`px-4 py-2 rounded ${candidate.isSaved
                                         ? 'bg-red-500 text-white hover:bg-red-600'
                                         : 'bg-green-500 text-white hover:bg-green-600'

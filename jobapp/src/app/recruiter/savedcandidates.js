@@ -1,35 +1,64 @@
-import { useState } from 'react';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRecruiterContext } from '../context/recruitercontext';
 
 export default function SavedCandidates() {
-    const [candidates, setCandidates] = useState([
-        {
-            id: 1,
-            fullName: "Alice Johnson",
-            phoneNumber: "123-456-7890",
-            email: "alice@example.com",
-            avatar: "https://via.placeholder.com/50",
-            cvUrl: "/path/to/cv-alice.pdf", // Đường dẫn đến CV
-            isSaved: true // Trạng thái lưu
-        },
-        {
-            id: 2,
-            fullName: "Bob Smith",
-            phoneNumber: "987-654-3210",
-            email: "bob@example.com",
-            avatar: "https://via.placeholder.com/50",
-            cvUrl: "/path/to/cv-bob.pdf", // Đường dẫn đến CV
-            isSaved: true // Trạng thái lưu
-        },
-        // Bạn có thể thêm nhiều ứng viên khác vào đây
-    ]);
+    const [companyId, setCompanyId] = useState();
+    const { recruiter } = useRecruiterContext();
+    const [candidates, setCandidates] = useState([]);
 
-    // Hàm để lưu hoặc bỏ lưu ứng viên
-    const handleSaveToggle = (id) => {
-        setCandidates((prevCandidates) =>
-            prevCandidates.map((candidate) =>
-                candidate.id === id ? { ...candidate, isSaved: !candidate.isSaved } : candidate
-            )
-        );
+    useEffect(() => {
+        fetchSavedCandidates();
+    }, [companyId]);
+
+    useEffect(() => {
+        if (recruiter?.companyId) {
+            setCompanyId(recruiter.companyId);
+        }
+    }, [recruiter?.companyId]);
+
+    const fetchSavedCandidates = async () => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/candidate/get-saved-candidates/${companyId}`);
+            const data = await response.json();
+
+            const candidatesWithStatus = await Promise.all(
+                data.map(async (candidate) => {
+                    const isSaved = await fetchSavedStatus(candidate.id);
+                    return { ...candidate, isSaved };
+                })
+            );
+
+            setCandidates(candidatesWithStatus);
+        } catch (error) {
+            console.error('Error fetching saved candidates:', error);
+        }
+    };
+
+    const fetchSavedStatus = async (candidateId) => {
+        try {
+            const response = await fetch(
+                `http://localhost:8080/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
+            );
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching saved status:', error);
+            return false;
+        }
+    };
+
+    const handleSaveToggle = async (candidateId, isCurrentlySaved) => {
+        const url = isCurrentlySaved
+            ? `http://localhost:8080/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
+            : `http://localhost:8080/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
+
+        try {
+            await fetch(url, { method: 'POST' });
+            fetchSavedCandidates();
+        } catch (error) {
+            console.error(`Error ${isCurrentlySaved ? 'unsaving' : 'saving'} candidate:`, error);
+        }
     };
 
     return (
@@ -54,7 +83,7 @@ export default function SavedCandidates() {
                             </div>
                             <div className="flex items-center space-x-4">
                                 <a
-                                    href={candidate.cvUrl}
+                                    href={candidate.fileCV}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -62,7 +91,7 @@ export default function SavedCandidates() {
                                     View CV
                                 </a>
                                 <button
-                                    onClick={() => handleSaveToggle(candidate.id)}
+                                    onClick={() => handleSaveToggle(candidate.id, candidate.isSaved)}
                                     className={`px-4 py-2 ${candidate.isSaved ? 'bg-red-500' : 'bg-green-500'} text-white rounded hover:bg-opacity-75`}
                                 >
                                     {candidate.isSaved ? 'Unsave' : 'Save'}
