@@ -1,51 +1,57 @@
 "use client";
+
 import CustomTopBar from '@/app/common/customtopbar';
 import Footer from '@/app/common/footer';
 import SearchBar from '@/app/common/searchbar';
 import FindingJobList from '@/app/findingjoblist';
-import RelatedJob from '@/app/relatedjob';
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
-import JobDetail from './detail/jobdetail';
 
-export default function Home() {
-
-    const [categories, setCategories] = useState([])
+export default function JobPage() {
     const [loading, setLoading] = useState(true);
     const [searchMode, setSearchMode] = useState(false);
-    const [page, setPage] = useState(0);
-    const categoriesPerPage = 8;
-    const startIdx = page * categoriesPerPage;
-    const [relatedJobs, setRelatedJobs] = useState([]);
-
+    const [searchResults, setSearchResults] = useState([]);
 
     useEffect(() => {
-        fetch('http://localhost:8080/api/category/get-job-amount')
-            .then(res => res.json())
-            .then(data => {
-                const filteredData = data.filter(category => category.jobs > 0);
-                setCategories(filteredData);
-            })
-            .finally(() => setLoading(false));
-    }, [])
-
-
-    const [currentPage, setCurrentPage] = useState(1);
-    const jobsPerPage = 20;
-
-    const indexOfLastJob = currentPage * jobsPerPage;
-    const indexOfFirstJob = indexOfLastJob - jobsPerPage;
-
+        const results = localStorage.getItem('searchResults');
+        if (results) {
+            setSearchResults(JSON.parse(results)); // Retrieve search results from localStorage
+            setSearchMode(true); // Switch to search mode
+        }
+        setLoading(false); // Set loading to false after fetching results
+    }, []);
 
     const handleSearch = (searchQuery) => {
-        fetch(`http://localhost:8080/api/job/search?keyword=${searchQuery.keyword}`)
-            .then(res => res.json())
-            .then(data => {
+        // Construct the query parameters from the search query
+        const { keyword, province, categoryId } = searchQuery;
+        let queryParams = `?keyword=${keyword || ''}`;
+
+        if (province) {
+            queryParams += `&province=${province}`;
+        }
+        if (categoryId) {
+            queryParams += `&categoryId=${categoryId}`;
+        }
+
+        // Fetch the search results
+        fetch(`http://localhost:8080/api/job/search${queryParams}`)
+            .then((res) => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then((data) => {
                 setSearchResults(data);
-                setSearchMode(true);
+                setSearchMode(true); // Switch to search mode
+                localStorage.setItem('searchResults', JSON.stringify(data)); // Store search results
+            })
+            .catch((error) => {
+                console.error('Error fetching search results:', error);
+                setSearchResults([]); // Clear results on error
+                setSearchMode(false); // Switch back to default mode
             });
     };
-
 
     return (
         <>
@@ -67,31 +73,18 @@ export default function Home() {
                     </div>
                 </section>
 
-                {searchMode ? (
-                    <>
-                        <FindingJobList jobs={searchResults} />
-                        <Footer />
-                    </>
+                {loading ? (
+                    <div className="flex justify-center items-center py-8">
+                        <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32"></div>
+                    </div>
+                ) : searchMode ? (
+                    <FindingJobList jobs={searchResults} />
                 ) : (
-                    <>
-                        {loading ? (
-                            <div className="flex justify-center items-center py-8">
-                                <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32"></div>
-                                <p className="ml-4 text-lg text-black">Loading...</p>
-                            </div>
-                        ) : (
-                            <>
-                                <JobDetail />
-                                <div className="max-w-7xl mx-auto p-6 text-black">
-                                    <h1 className="text-3xl font-bold mb-6 text-black-700 text-black">Việc làm liên quan</h1>
-                                    <RelatedJob jobs={relatedJobs} />
-                                </div>
-                                <Footer />
-                            </>
-                        )}
-                    </>
+                    <div className="flex justify-center items-center py-8">
+                        <p className="ml-4 text-lg text-black">No search results found.</p>
+                    </div>
                 )}
-
+                <Footer />
             </main>
         </>
     );

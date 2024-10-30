@@ -1,3 +1,5 @@
+// app/page.js
+
 "use client";
 
 import Head from 'next/head';
@@ -41,14 +43,40 @@ export default function Home() {
   };
 
   const handleSearch = (searchQuery) => {
-    fetch(`http://localhost:8080/api/job/search?keyword=${searchQuery.keyword}`)
-      .then(res => res.json())
+    const { keyword, province, categoryId } = searchQuery;
+    let queryParams = `?keyword=${keyword || ''}`;
+
+    if (province) {
+      queryParams += `&province=${province}`;
+    }
+    if (categoryId) {
+      queryParams += `&categoryId=${categoryId}`;
+    }
+
+    fetch(`http://localhost:8080/api/job/search${queryParams}`)
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return res.json();
+      })
       .then(data => {
-        localStorage.setItem('searchResults', JSON.stringify(data));
-        setSearchMode(true);
-        router.push('/job');
+        if (data.length === 0) {
+          // Handle the case where no results are found
+          alert('No jobs found for your search criteria.');
+          setSearchMode(false); // Optionally reset to non-search mode
+        } else {
+          localStorage.setItem('searchResults', JSON.stringify(data)); // Store search results
+          setSearchMode(true); // Switch to search mode
+          router.push('/job'); // Navigate to the job results page
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching search results:', error);
+        alert('An error occurred while fetching search results. Please try again later.');
       });
   };
+
 
   return (
     <>
@@ -71,8 +99,7 @@ export default function Home() {
         </section>
 
         {searchMode ? (
-          <>
-          </>
+          <p className="text-lg text-center text-gray-700">Searching...</p>
         ) : (
           <>
             {loading ? (

@@ -9,7 +9,7 @@ export default function YourProfile() {
     const [searchStatus, setSearchStatus] = useState(false);
     const [avatar, setAvatar] = useState(null);
     const [fullname, setFullname] = useState('');
-    const [phonenumber, setPhonenumber] = useState('');
+    const [phoneNumber, setPhonenumber] = useState('');
     const [candidate, setCandidate] = useState(null);
     const [cvList, setCvList] = useState([]);
     const [selectedCvId, setSelectedCvId] = useState(null);
@@ -69,20 +69,20 @@ export default function YourProfile() {
             method: 'POST',
             body: formData,
         })
-        .then(res => {
-            if (!res.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return res.json();
-        })
-        .then(data => {
-            setUserData(data.email, data);
-            alert('Avatar changed successfully!');
-        })
-        .catch(error => {
-            console.error('Error changing avatar:', error);
-            alert('Failed to change avatar. Please check your file and try again.');
-        });
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then(data => {
+                setUserData(data.email, data);
+                alert('Avatar changed successfully!');
+            })
+            .catch(error => {
+                console.error('Error changing avatar:', error);
+                alert('Failed to change avatar. Please check your file and try again.');
+            });
     };
 
     const editInformation = () => {
@@ -96,52 +96,107 @@ export default function YourProfile() {
                 phoneNumber: phonenumber,
             }),
         })
-        .then(res => {
-            if (!res.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return res.json();
-        })
-        .then(data => {
-            setCandidate(prev => ({
-                ...prev,
-                fullname: data.fullname,
-                phoneNumber: data.phoneNumber,
-            }));
-            alert('Information updated successfully!');
-        })
-        .catch(error => {
-            console.error('Error updating information:', error);
-            alert('Failed to update information. Please try again.');
-        });
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then(data => {
+                setCandidate(prev => ({
+                    ...prev,
+                    fullname: data.fullname,
+                    phoneNumber: data.phoneNumber,
+                }));
+                alert('Information updated successfully!');
+            })
+            .catch(error => {
+                console.error('Error updating information:', error);
+                alert('Failed to update information. Please try again.');
+            });
     };
 
-    // Updated toggleSearchStatus function
     const toggleSearchStatus = () => {
-        if (selectedCvId) {
-            const url = searchStatus
-                ? `http://localhost:8080/api/candidate/disable-finding-jobs/${candidate.id}`
-                : `http://localhost:8080/api/candidate/enable-finding-jobs/${candidate.id}`;
-
-            fetch(url, { method: 'POST' })
-                .then(res => {
-                    if (!res.ok) {
-                        throw new Error('Failed to toggle job search status');
-                    }
-                    return res.json();
-                })
-                .then(data => {
-                    setSearchStatus(!searchStatus);  // Toggle the status on success
-                    alert(`Job search status has been ${searchStatus ? 'disabled' : 'enabled'}!`);
-                })
-                .catch(error => {
-                    console.error('Error toggling job search status:', error);
-                    alert('Failed to toggle job search status. Please try again.');
-                });
-        } else {
+        if (!selectedCvId) {
             alert("Bạn cần chọn CV chính trước khi bật trạng thái tìm kiếm việc làm.");
+            return;
         }
+    
+        const enableUrl = `http://localhost:8080/api/candidate/enable-finding-jobs/${candidate.id}`;
+        const disableUrl = `http://localhost:8080/api/candidate/disable-finding-jobs/${candidate.id}`;
+        const toggleUrl = searchStatus ? disableUrl : enableUrl;
+    
+        fetch(toggleUrl, { method: 'POST' })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to toggle job search status');
+                return res.json();
+            })
+            .then(() => {
+                setSearchStatus(!searchStatus);
+    
+                if (!searchStatus) {
+                    fetch(`http://localhost:8080/api/cv/make-main-cv?id=${selectedCvId}&candidateId=${candidate.id}`, {
+                        method: 'POST',
+                    })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Failed to mark CV as main');
+                            return res.json();
+                        })
+                        .then(() => {
+                            return fetch(`http://localhost:8080/api/cv/get-fileCV-by-CV-id/${selectedCvId}`);
+                        })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Failed to retrieve CV URL');
+                            return res.text();
+                        })
+                        .then(cvUrl => {
+                            return fetch(`http://localhost:8080/api/extract-text-from-url/${candidate.id}?imageUrl=${encodeURIComponent(cvUrl)}`, {
+                                method: 'POST'
+                            });
+                        })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Failed to extract text from CV URL');
+                            return res.text();
+                        })
+                        .then(data => {
+                            alert(`Job search enabled, CV processed: ${data}`);
+                        })
+                        .catch(error => {
+                            console.error('Error processing CV for job search:', error);
+                            alert('Error processing CV for job search.');
+                        });
+                } else {
+                    fetch(`http://localhost:8080/api/cv/unmake-all-main-cv?candidateId=${candidate.id}`, {
+                        method: 'POST',
+                    })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Failed to unmark all CVs as main');
+                            return res.json();
+                        })
+                        .then(() => {
+                            return fetch(`http://localhost:8080/api/extract-cv/delete-by-candidate-id/${candidate.id}`, {
+                                method: 'DELETE'
+                            });
+                        })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Failed to delete extracted CV data');
+                            return res.text();
+                        })
+                        .then(data => {
+                            alert('Job search disabled, CV data deleted.');
+                        })
+                        .catch(error => {
+                            console.error('Error deleting CV data:', error);
+                            alert('Failed to delete CV data.');
+                        });
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling job search status:', error);
+                alert('Failed to toggle job search status. Please try again.');
+            });
     };
+    
 
     const handleCvSelect = event => {
         const cvId = parseInt(event.target.value, 10);
@@ -164,7 +219,7 @@ export default function YourProfile() {
                         {/* Avatar Section */}
                         <div className="flex items-center mb-4">
                             <img
-                                src={account?.avatar || '/path/to/default-avatar.png'} // Default avatar if account.avatar is null
+                                src={account?.avatar || '/path/to/default-avatar.png'}
                                 alt="Avatar"
                                 className="w-20 h-20 rounded-full object-cover mr-4"
                             />
@@ -191,7 +246,7 @@ export default function YourProfile() {
 
                         {/* Save Button */}
                         <button className="bg-blue-500 text-white px-4 py-2 rounded-md mr-2"
-                        onClick={saveAvatar}>
+                            onClick={saveAvatar}>
                             Save
                         </button>
 
@@ -235,7 +290,7 @@ export default function YourProfile() {
 
                         {/* Save Button */}
                         <button className="bg-blue-500 text-white px-4 py-2 rounded-md"
-                        onClick={editInformation}>
+                            onClick={editInformation}>
                             Save
                         </button>
                     </div>

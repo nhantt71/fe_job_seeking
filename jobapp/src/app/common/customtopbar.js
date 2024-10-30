@@ -19,11 +19,9 @@ const CustomTopBar = () => {
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
-            setIsAuthenticated(true);
             fetchCurrentUser(token);
         }
     }, []);
-
 
     const fetchCurrentUser = async (token) => {
         try {
@@ -41,12 +39,16 @@ const CustomTopBar = () => {
 
             const data = await res.json();
             setUserData(data.username, data);
+            setIsAuthenticated(true);
 
             if (data.username) {
                 fetchAccountByEmail(data.username);
             }
         } catch (error) {
             console.error('Error fetching current user:', error);
+            // Token might be expired or invalid; remove it
+            localStorage.removeItem('token');
+            setIsAuthenticated(false);
         }
     };
 
@@ -66,7 +68,6 @@ const CustomTopBar = () => {
         setIsAuthenticated(false);
         window.location.href = '/';
     };
-
 
     useEffect(() => {
         const handleClickOutside = (event) => {

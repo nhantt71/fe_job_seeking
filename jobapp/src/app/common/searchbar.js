@@ -9,28 +9,45 @@ const SearchBar = ({ onSearch }) => {
     const [selectedProvince, setSelectedProvince] = useState('');
     const [isLoading, setLoading] = useState(true);
 
+    // Fetch job categories from the API
     useEffect(() => {
         fetch('http://localhost:8080/api/category')
             .then(res => res.json())
             .then(data => {
                 setCategories(data);
                 setLoading(false);
+            })
+            .catch((error) => {
+                console.error('Error fetching categories:', error);
+                setLoading(false);
             });
     }, []);
 
+    // Fetch provinces from the API
     useEffect(() => {
         fetch('http://localhost:8080/api/v1/locations/provinces')
             .then(res => res.json())
-            .then(data => setCities(data));
+            .then(data => setCities(data))
+            .catch((error) => {
+                console.error('Error fetching cities:', error);
+            });
     }, []);
 
+    // Handle form submission for search
     const handleSearch = (e) => {
         e.preventDefault();
-        onSearch({
-            keyword,
-            province: selectedProvince,
-            categoryId: selectedCategory,
-        });
+
+        // Check if any search parameters are filled
+        if (keyword || selectedProvince || selectedCategory) {
+            onSearch({
+                keyword,
+                province: selectedProvince,
+                categoryId: selectedCategory,
+            });
+        } else {
+            // If no search parameters, fetch all jobs
+            onSearch(); // Assuming `onSearch` can handle an empty call to fetch all jobs
+        }
     };
 
     return (
@@ -52,8 +69,8 @@ const SearchBar = ({ onSearch }) => {
                     onChange={(e) => setSelectedProvince(e.target.value)}
                 >
                     <option value="" disabled>Chọn thành phố</option>
-                    {cities.map((city) => (
-                        <option value={city}>
+                    {cities.map((city, index) => (
+                        <option value={city} key={index}>
                             {city}
                         </option>
                     ))}
