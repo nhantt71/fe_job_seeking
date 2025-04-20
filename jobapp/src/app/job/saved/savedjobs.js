@@ -12,7 +12,7 @@ const SavedJobs = () => {
 
     useEffect(() => {
         if (email) {
-            fetch(`http://localhost:8080/api/candidate/get-candidate-by-email?email=${email}`)
+            fetch(`/api/candidate/get-candidate-by-email?email=${email}`)
                 .then(res => res.json())
                 .then(data => {
                     setCandidate(data);
@@ -25,7 +25,7 @@ const SavedJobs = () => {
 
     useEffect(() => {
         if (candidate) {
-            fetch(`http://localhost:8080/api/job/get-saved-jobs/${candidate.id}`)
+            fetch(`/api/job/get-saved-jobs/${candidate.id}`)
                 .then(res => res.json())
                 .then(data => {
                     setSavedJobs(data);
@@ -37,7 +37,7 @@ const SavedJobs = () => {
     }, [candidate]);
 
     const handleUnsave = (id) => {
-        fetch(`http://localhost:8080/api/job-candidate/unsave-job?jobId=${id}&candidateId=${candidate.id}`, {
+        fetch(`/api/job-candidate/unsave-job?jobId=${id}&candidateId=${candidate.id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ const SavedJobs = () => {
     };
 
     const handleSave = (job) => {
-        fetch(`http://localhost:8080/api/job-candidate/save-job?jobId=${job.id}&candidateId=${candidate.id}`, {
+        fetch(`/api/job-candidate/save-job?jobId=${job.id}&candidateId=${candidate.id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

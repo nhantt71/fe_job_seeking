@@ -18,7 +18,7 @@ export default function ChangePassword() {
             return;
         }
 
-        fetch(`http://localhost:8080/api/auth/change-password?accountId=${account.id}&newPassword=${newPassword}&oldPassword=${oldPassword}`, {
+        fetch(`/api/auth/change-password?accountId=${account.id}&newPassword=${newPassword}&oldPassword=${oldPassword}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

@@ -24,7 +24,7 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/category/get-job-amount')
+    fetch('/api/category/get-job-amount')
       .then(res => res.json())
       .then(data => {
         const filteredData = data.filter(category => category.jobs > 0);
@@ -53,7 +53,7 @@ export default function Home() {
       queryParams += `&categoryId=${categoryId}`;
     }
 
-    fetch(`http://localhost:8080/api/job/search${queryParams}`)
+    fetch(`/api/job/search${queryParams}`)
       .then(res => {
         if (!res.ok) {
           throw new Error('Network response was not ok');
@@ -136,6 +136,7 @@ export default function Home() {
                     {paginatedCategories.map((category) => (
                       <FeaturedJobs
                         key={category.id}
+                        categoryId={category.id}
                         icon={category.icon}
                         name={category.name}
                         jobCount={category.jobs}

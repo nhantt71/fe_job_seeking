@@ -36,7 +36,7 @@ export default function JobsManagement() {
 
     const fetchCategories = async () => {
         try {
-            const response = await fetch('http://localhost:8080/api/category');
+            const response = await fetch('/api/category');
             const data = await response.json();
             const names = {};
             data.forEach((category) => {
@@ -51,7 +51,7 @@ export default function JobsManagement() {
 
     const fetchAllJobs = async (id) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/job/get-job-by-company-id/${id}`);
+            const res = await fetch(`/api/job/get-job-by-company-id/${id}`);
             if (!res.ok) throw new Error('Failed to fetch jobs');
             const data = await res.json();
             setJobs(data);
@@ -62,7 +62,7 @@ export default function JobsManagement() {
 
     const fetchJobById = async (jobId) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/job/get-job-by-id/${jobId}`);
+            const res = await fetch(`/api/job/get-job-by-id/${jobId}`);
             if (!res.ok) throw new Error('Failed to fetch job');
             const data = await res.json();
             setEditingJob({ ...data, category: data.category.id });
@@ -96,7 +96,7 @@ export default function JobsManagement() {
             const recruiterId = recruiter?.id;
             const companyId = recruiter?.companyId;
 
-            const response = await fetch(`http://localhost:8080/api/job/create`, {
+            const response = await fetch(`/api/job/create`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
@@ -137,7 +137,7 @@ export default function JobsManagement() {
 
     const handleUpdate = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/job/edit/${editingJob.id}`, {
+            const response = await fetch(`/api/job/edit/${editingJob.id}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
@@ -171,7 +171,7 @@ export default function JobsManagement() {
 
     const handleDelete = async (jobId) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/job/delete/${jobId}`, {
+            const response = await fetch(`/api/job/delete/${jobId}`, {
                 method: "DELETE",
             });
 
@@ -188,7 +188,7 @@ export default function JobsManagement() {
 
     const handlePublish = async (jobId) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/job/publish/${jobId}`, {
+            const response = await fetch(`/api/job/publish/${jobId}`, {
                 method: "POST",
             });
 
@@ -210,7 +210,7 @@ export default function JobsManagement() {
 
     const handleUnpublish = async (jobId) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/job/unpublish/${jobId}`, {
+            const response = await fetch(`/api/job/unpublish/${jobId}`, {
                 method: "POST",
             });
 

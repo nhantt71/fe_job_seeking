@@ -20,7 +20,7 @@ export default function SavedCandidates() {
 
     const fetchSavedCandidates = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/candidate/get-saved-candidates/${companyId}`);
+            const response = await fetch(`/api/candidate/get-saved-candidates/${companyId}`);
             const data = await response.json();
 
             const candidatesWithStatus = await Promise.all(
@@ -39,7 +39,7 @@ export default function SavedCandidates() {
     const fetchSavedStatus = async (candidateId) => {
         try {
             const response = await fetch(
-                `http://localhost:8080/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
+                `/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
             );
             return await response.json();
         } catch (error) {
@@ -50,8 +50,8 @@ export default function SavedCandidates() {
 
     const handleSaveToggle = async (candidateId, isCurrentlySaved) => {
         const url = isCurrentlySaved
-            ? `http://localhost:8080/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
-            : `http://localhost:8080/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
+            ? `/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
+            : `/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
 
         try {
             await fetch(url, { method: 'POST' });

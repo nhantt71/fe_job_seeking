@@ -11,7 +11,7 @@ const AppliedJobs = () => {
 
     useEffect(() => {
         if (email) {
-            fetch(`http://localhost:8080/api/candidate/get-candidate-by-email?email=${email}`)
+            fetch(`/api/candidate/get-candidate-by-email?email=${email}`)
                 .then(res => res.json())
                 .then(data => {
                     setCandidate(data);
@@ -24,7 +24,7 @@ const AppliedJobs = () => {
 
     useEffect(() => {
         if (candidate) {
-            fetch(`http://localhost:8080/api/job/get-applied-jobs/${candidate.id}`)
+            fetch(`/api/job/get-applied-jobs/${candidate.id}`)
                 .then(res => res.json())
                 .then(data => {
                     setAppliedJobs(data);

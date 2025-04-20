@@ -19,7 +19,7 @@ export default function Members() {
     // Fetch members
     const fetchMembers = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/recruiter/get-members-by-company/${companyId}`);
+            const response = await fetch(`/api/recruiter/get-members-by-company/${companyId}`);
             const data = await response.json();
             setMembers(Array.isArray(data) ? data : []); // Ensure data is an array
         } catch (error) {
@@ -30,7 +30,7 @@ export default function Members() {
     // Fetch waiting members
     const fetchWaitingMembers = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/recruiter/get-waiting-recruiters-by-company/${companyId}`);
+            const response = await fetch(`/api/recruiter/get-waiting-recruiters-by-company/${companyId}`);
             const data = await response.json();
             setWaitingMembers(Array.isArray(data) ? data : []); // Ensure data is an array
         } catch (error) {
@@ -47,7 +47,7 @@ export default function Members() {
 
     const handleKick = async (id) => {
         try {
-            await fetch(`http://localhost:8080/api/recruiter/kick-member/${id}?companyId=${companyId}`, {
+            await fetch(`/api/recruiter/kick-member/${id}?companyId=${companyId}`, {
                 method: 'POST',
             });
             setMembers((prev) => prev.filter((member) => member.id !== id));
@@ -58,7 +58,7 @@ export default function Members() {
 
     const handleApprove = async (id) => {
         try {
-            await fetch(`http://localhost:8080/api/recruiter/approve-member/${id}?companyId=${companyId}`, {
+            await fetch(`/api/recruiter/approve-member/${id}?companyId=${companyId}`, {
                 method: 'POST',
             });
             const memberToApprove = waitingMembers.find((member) => member.id === id);
@@ -73,7 +73,7 @@ export default function Members() {
 
     const handleDecline = async (id) => {
         try {
-            await fetch(`http://localhost:8080/api/recruiter/decline-member/${id}?companyId=${companyId}`, {
+            await fetch(`/api/recruiter/decline-member/${id}?companyId=${companyId}`, {
                 method: 'POST',
             });
             setWaitingMembers((prev) => prev.filter((member) => member.id !== id));

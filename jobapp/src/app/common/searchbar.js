@@ -8,10 +8,17 @@ const SearchBar = ({ onSearch }) => {
     const [selectedCategory, setSelectedCategory] = useState('');
     const [selectedProvince, setSelectedProvince] = useState('');
     const [isLoading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Fetch job categories from the API
     useEffect(() => {
-        fetch('http://localhost:8080/api/category')
+        if (!mounted) return;
+        
+        fetch('/api/category')
             .then(res => res.json())
             .then(data => {
                 setCategories(data);
@@ -21,17 +28,19 @@ const SearchBar = ({ onSearch }) => {
                 console.error('Error fetching categories:', error);
                 setLoading(false);
             });
-    }, []);
+    }, [mounted]);
 
     // Fetch provinces from the API
     useEffect(() => {
-        fetch('http://localhost:8080/api/v1/locations/provinces')
+        if (!mounted) return;
+        
+        fetch('/api/v1/locations/provinces')
             .then(res => res.json())
             .then(data => setCities(data))
             .catch((error) => {
                 console.error('Error fetching cities:', error);
             });
-    }, []);
+    }, [mounted]);
 
     // Handle form submission for search
     const handleSearch = (e) => {
@@ -50,21 +59,23 @@ const SearchBar = ({ onSearch }) => {
         }
     };
 
+    if (!mounted) {
+        return null; // or a loading state
+    }
+
     return (
         <form onSubmit={handleSearch} className="flex items-center justify-between bg-white p-4 rounded-lg shadow-md">
             <div className="flex space-x-2 w-full">
                 <input
-                    style={{ color: 'black' }}
                     type="text"
-                    className="border border-gray-300 rounded-lg px-4 py-2 flex-grow focus:outline-none"
+                    className="border border-gray-300 rounded-lg px-4 py-2 flex-grow focus:outline-none text-black"
                     placeholder="Nhập từ khóa tìm kiếm"
                     value={keyword}
                     onChange={(e) => setKeyword(e.target.value)}
                 />
 
                 <select
-                    className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none"
-                    style={{ color: 'black' }}
+                    className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none text-black"
                     value={selectedProvince}
                     onChange={(e) => setSelectedProvince(e.target.value)}
                 >
@@ -77,7 +88,7 @@ const SearchBar = ({ onSearch }) => {
                 </select>
 
                 <select
-                    className="text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none"
+                    className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none text-black"
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
                 >

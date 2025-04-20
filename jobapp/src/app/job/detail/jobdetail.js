@@ -18,7 +18,7 @@ export default function JobDetail() {
     // Lấy thông tin ứng viên
     useEffect(() => {
         if (email) {
-            fetch(`http://localhost:8080/api/candidate/get-candidate-by-email?email=${email}`)
+            fetch(`/api/candidate/get-candidate-by-email?email=${email}`)
                 .then(res => res.json())
                 .then(data => {
                     setCandidate(data);
@@ -32,7 +32,7 @@ export default function JobDetail() {
     // Lấy chi tiết công việc
     useEffect(() => {
         if (id) {
-            fetch(`http://localhost:8080/api/job/detail/${id}`)
+            fetch(`/api/job/detail/${id}`)
                 .then((res) => res.json())
                 .then((data) => {
                     setJob(data);
@@ -46,7 +46,7 @@ export default function JobDetail() {
 
     useEffect(() => {
         if (candidate) {
-            fetch(`http://localhost:8080/api/job-candidate/check-saved-job?candidateId=${candidate.id}&jobId=${id}`)
+            fetch(`/api/job-candidate/check-saved-job?candidateId=${candidate.id}&jobId=${id}`)
                 .then(res => {
                     if (!res.ok) {
                         setIsSaved(false);
@@ -74,7 +74,7 @@ export default function JobDetail() {
         }
 
         if (isSaved) {
-            fetch(`http://localhost:8080/api/job-candidate/unsave-job?jobId=${id}&candidateId=${candidate.id}`, {
+            fetch(`/api/job-candidate/unsave-job?jobId=${id}&candidateId=${candidate.id}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -89,7 +89,7 @@ export default function JobDetail() {
                     console.error('Error unsaving job:', error);
                 });
         } else {
-            fetch(`http://localhost:8080/api/job-candidate/save-job?jobId=${id}&candidateId=${candidate.id}`, {
+            fetch(`/api/job-candidate/save-job?jobId=${id}&candidateId=${candidate.id}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

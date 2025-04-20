@@ -13,7 +13,7 @@ function Home() {
 
     useEffect(() => {
         const fetchCompanies = async () => {
-            const response = await fetch('http://localhost:8080/api/company');
+            const response = await fetch('/api/company');
             const data = await response.json();
             setCompanies(data);
         };
@@ -38,7 +38,7 @@ function Home() {
     };
 
     const handleSearch = (searchQuery) => {
-        fetch(`http://localhost:8080/api/company/search?keyword=${searchQuery.keyword}`)
+        fetch(`/api/company/search?keyword=${searchQuery.keyword}`)
             .then(res => res.json())
             .then(data => {
                 setSearchResults(data);

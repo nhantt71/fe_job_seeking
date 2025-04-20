@@ -2,11 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 
-const FeaturedJobs = ({ key, icon, name, jobCount }) => {
+const FeaturedJobs = ({ categoryId, icon, name, jobCount }) => {
     const router = useRouter();
 
     const handleClick = () => {
-        router.push(`/job?cateId=${key}`);
+        router.push(`/job?cateId=${categoryId}`);
     };
 
     return (

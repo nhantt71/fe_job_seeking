@@ -10,7 +10,7 @@ const FeaturedCompanies = () => {
     const router = useRouter();
 
     useEffect(()=>{
-        fetch('http://localhost:8080/api/company')
+        fetch('/api/company')
             .then(res => res.json())
             .then(data => {
                 const filteredData = data.filter(company => company.jobAmount > 0)

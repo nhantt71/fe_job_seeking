@@ -34,7 +34,7 @@ export default function JobPage() {
         }
 
         // Fetch the search results
-        fetch(`http://localhost:8080/api/job/search${queryParams}`)
+        fetch(`/api/job/search${queryParams}`)
             .then((res) => {
                 if (!res.ok) {
                     throw new Error('Network response was not ok');

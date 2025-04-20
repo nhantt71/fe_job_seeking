@@ -36,7 +36,7 @@ export default function MyCompany() {
 
     const fetchCreatedRecruiter = async (id) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/recruiter/get-recruiter/${id}`);
+            const res = await fetch(`/api/recruiter/get-recruiter/${id}`);
             if (!res.ok) throw new Error('Failed to fetch recruiter');
             const data = await res.json();
             setCreatedRecruiter(data);
@@ -47,7 +47,7 @@ export default function MyCompany() {
 
     const fetchCompanyData = async (id) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/company/get-company-by-id/${id}`);
+            const res = await fetch(`/api/company/get-company-by-id/${id}`);
             if (!res.ok) throw new Error('Failed to fetch company data');
             const data = await res.json();
             setCompany(data);
@@ -58,7 +58,7 @@ export default function MyCompany() {
 
     const fetchPublishedJobs = async (id) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/job/get-published-jobs-by-company-id/${id}`);
+            const res = await fetch(`/api/job/get-published-jobs-by-company-id/${id}`);
             if (!res.ok) throw new Error('Failed to fetch jobs');
             const data = await res.json();
             setJobs(data);
@@ -69,7 +69,7 @@ export default function MyCompany() {
 
     const handleUpdate = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/company/edit/${company.id}`, {
+            const response = await fetch(`/api/company/edit/${company.id}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -117,7 +117,7 @@ export default function MyCompany() {
         formData.append('id', company.id);
 
         try {
-            const res = await fetch('http://localhost:8080/api/company/change-logo', {
+            const res = await fetch('/api/company/change-logo', {
                 method: 'POST',
                 body: formData,
             });

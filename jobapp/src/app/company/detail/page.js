@@ -20,7 +20,7 @@ export default function Home() {
 
     // Fetch các danh mục công việc từ API
     useEffect(() => {
-        fetch('http://localhost:8080/api/category/get-job-amount')
+        fetch('/api/category/get-job-amount')
             .then((res) => res.json())
             .then((data) => {
                 const filteredData = data.filter((category) => category.jobs > 0);
@@ -31,7 +31,7 @@ export default function Home() {
 
     // Xử lý khi người dùng tìm kiếm công việc
     const handleSearch = (searchQuery) => {
-        fetch(`http://localhost:8080/api/job/search?keyword=${searchQuery.keyword}`)
+        fetch(`/api/job/search?keyword=${searchQuery.keyword}`)
             .then((res) => res.json())
             .then((data) => {
                 setSearchResults(data);

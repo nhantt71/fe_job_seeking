@@ -22,7 +22,7 @@ const RecruiterCustomTopBar = () => {
 
     const fetchCurrentUser = async (token) => {
         try {
-            const res = await fetch('http://localhost:8080/api/auth/current-user', {
+            const res = await fetch('/api/auth/current-user', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ const RecruiterCustomTopBar = () => {
 
     const fetchAccountByEmail = async (email) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/auth/get-account-by-email?email=${email}`);
+            const res = await fetch(`/api/auth/get-account-by-email?email=${email}`);
             if (!res.ok) throw new Error('Failed to fetch account');
             const data = await res.json();
             setUserData(email, data);
@@ -67,7 +67,7 @@ const RecruiterCustomTopBar = () => {
 
     const fetchRecruiterByEmail = async (email) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/recruiter/get-recruiter-by-email?email=${email}`);
+            const res = await fetch(`/api/recruiter/get-recruiter-by-email?email=${email}`);
             if (!res.ok) throw new Error('Failed to fetch recruiter');
             const data = await res.json();
             setRecruiterData(data);

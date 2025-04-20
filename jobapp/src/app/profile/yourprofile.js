@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useUserContext } from '../context/usercontext';
+import { useRouter } from 'next/navigation';
 
 export default function YourProfile() {
     const { email, account, setUserData } = useUserContext();
@@ -13,28 +14,63 @@ export default function YourProfile() {
     const [candidate, setCandidate] = useState(null);
     const [cvList, setCvList] = useState([]);
     const [selectedCvId, setSelectedCvId] = useState(null);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const router = useRouter();
 
     useEffect(() => {
-        if (email) {
-            fetch(`http://localhost:8080/api/candidate/get-candidate-by-email?email=${email}`)
-                .then(res => res.json())
-                .then(data => {
-                    setCandidate(data);
-                    if (data) {
-                        setFullname(data.fullname || '');
-                        setPhonenumber(data.phoneNumber || '');
-                        setSearchStatus(data.available);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching candidate:', error);
-                });
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setIsAuthenticated(false);
+            return;
         }
-    }, [email]);
+
+        // Verify token with backend
+        fetch('/api/auth/current-user', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Token expired or invalid');
+            }
+            return res.json();
+        })
+        .then(data => {
+            setUserData(data.username, data);
+            setIsAuthenticated(true);
+            if (data.username) {
+                fetchCandidateData(data.username);
+            }
+        })
+        .catch(error => {
+            console.error('Error verifying token:', error);
+            localStorage.removeItem('token');
+            setIsAuthenticated(false);
+        });
+    }, []);
+
+    const fetchCandidateData = (email) => {
+        fetch(`/api/candidate/get-candidate-by-email?email=${email}`)
+            .then(res => res.json())
+            .then(data => {
+                setCandidate(data);
+                if (data) {
+                    setFullname(data.fullname || '');
+                    setPhonenumber(data.phoneNumber || '');
+                    setSearchStatus(data.available);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching candidate:', error);
+            });
+    };
 
     useEffect(() => {
         if (candidate) {
-            fetch(`http://localhost:8080/api/cv/get-cvs-by-candidate-id/${candidate.id}`)
+            fetch(`/api/cv/get-cvs-by-candidate-id/${candidate.id}`)
                 .then(res => res.json())
                 .then(data => {
                     setCvList(data);
@@ -65,7 +101,7 @@ export default function YourProfile() {
             formData.append('file', fileInput.files[0]);
         }
 
-        fetch(`http://localhost:8080/api/auth/change-avatar?accountId=${account.id}`, {
+        fetch(`/api/auth/change-avatar?accountId=${account.id}`, {
             method: 'POST',
             body: formData,
         })
@@ -86,14 +122,14 @@ export default function YourProfile() {
     };
 
     const editInformation = () => {
-        fetch(`http://localhost:8080/api/candidate/edit/${candidate.id}`, {
+        fetch(`/api/candidate/edit/${candidate.id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 fullname: fullname,
-                phoneNumber: phonenumber,
+                phoneNumber: phoneNumber,
             }),
         })
             .then(res => {
@@ -122,8 +158,8 @@ export default function YourProfile() {
             return;
         }
     
-        const enableUrl = `http://localhost:8080/api/candidate/enable-finding-jobs/${candidate.id}`;
-        const disableUrl = `http://localhost:8080/api/candidate/disable-finding-jobs/${candidate.id}`;
+        const enableUrl = `/api/candidate/enable-finding-jobs/${candidate.id}`;
+        const disableUrl = `/api/candidate/disable-finding-jobs/${candidate.id}`;
         const toggleUrl = searchStatus ? disableUrl : enableUrl;
     
         fetch(toggleUrl, { method: 'POST' })
@@ -135,7 +171,7 @@ export default function YourProfile() {
                 setSearchStatus(!searchStatus);
     
                 if (!searchStatus) {
-                    fetch(`http://localhost:8080/api/cv/make-main-cv?id=${selectedCvId}&candidateId=${candidate.id}`, {
+                    fetch(`/api/cv/make-main-cv?id=${selectedCvId}&candidateId=${candidate.id}`, {
                         method: 'POST',
                     })
                         .then(res => {
@@ -143,14 +179,14 @@ export default function YourProfile() {
                             return res.json();
                         })
                         .then(() => {
-                            return fetch(`http://localhost:8080/api/cv/get-fileCV-by-CV-id/${selectedCvId}`);
+                            return fetch(`/api/cv/get-fileCV-by-CV-id/${selectedCvId}`);
                         })
                         .then(res => {
                             if (!res.ok) throw new Error('Failed to retrieve CV URL');
                             return res.text();
                         })
                         .then(cvUrl => {
-                            return fetch(`http://localhost:8080/api/extract-text-from-url/${candidate.id}?imageUrl=${encodeURIComponent(cvUrl)}`, {
+                            return fetch(`/api/extract-text-from-url/${candidate.id}?imageUrl=${encodeURIComponent(cvUrl)}`, {
                                 method: 'POST'
                             });
                         })
@@ -166,7 +202,7 @@ export default function YourProfile() {
                             alert('Error processing CV for job search.');
                         });
                 } else {
-                    fetch(`http://localhost:8080/api/cv/unmake-all-main-cv?candidateId=${candidate.id}`, {
+                    fetch(`/api/cv/unmake-all-main-cv?candidateId=${candidate.id}`, {
                         method: 'POST',
                     })
                         .then(res => {
@@ -174,7 +210,7 @@ export default function YourProfile() {
                             return res.json();
                         })
                         .then(() => {
-                            return fetch(`http://localhost:8080/api/extract-cv/delete-by-candidate-id/${candidate.id}`, {
+                            return fetch(`/api/extract-cv/delete-by-candidate-id/${candidate.id}`, {
                                 method: 'DELETE'
                             });
                         })
@@ -206,6 +242,22 @@ export default function YourProfile() {
         }
         setSelectedCvId(cvId);
     };
+
+    if (!isAuthenticated) {
+        return (
+            <div className="container mx-auto p-4 text-black">
+                <div className="bg-white shadow-md rounded-lg p-6 text-center">
+                    <h2 className="text-xl font-bold mb-4">Please Login to View Your Profile</h2>
+                    <p className="mb-4">You need to be logged in to view your profile information.</p>
+                    <Link href="/candidate/login">
+                        <button className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                            Go to Login
+                        </button>
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container mx-auto p-4 text-black">
@@ -282,7 +334,7 @@ export default function YourProfile() {
                             </label>
                             <input
                                 type="text"
-                                value={phonenumber}
+                                value={phoneNumber}
                                 onChange={e => setPhonenumber(e.target.value)}
                                 className="w-full px-4 py-2 border rounded-lg"
                             />

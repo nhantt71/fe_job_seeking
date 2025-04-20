@@ -35,7 +35,7 @@ export default function Profile() {
 
     const fetchAccount = async (email) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/auth/get-account-by-email?email=${email}`);
+            const response = await fetch(`/api/auth/get-account-by-email?email=${email}`);
             const data = await response.json();
             setAccount(data);
             setAvatar(data.avatar);
@@ -46,7 +46,7 @@ export default function Profile() {
 
     const handleUpdateProfile = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/recruiter/edit/${recruiter.id}`, {
+            const response = await fetch(`/api/recruiter/edit/${recruiter.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fullname, phoneNumber, city, gender, province }),
@@ -73,7 +73,7 @@ export default function Profile() {
         setPasswordError(null);
 
         try {
-            await fetch(`http://localhost:8080/api/auth/change-password`, {
+            await fetch(`/api/auth/change-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -96,7 +96,7 @@ export default function Profile() {
         formData.append('accountId', account.id);
 
         try {
-            const response = await fetch(`http://localhost:8080/api/auth/change-avatar`, {
+            const response = await fetch(`/api/auth/change-avatar`, {
                 method: 'POST',
                 body: formData,
             });

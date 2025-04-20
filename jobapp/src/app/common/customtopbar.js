@@ -3,65 +3,136 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useUserContext } from '../context/usercontext';
+import { useRouter } from 'next/navigation';
+import { database } from '../firebase';
+import { ref, onValue, update } from 'firebase/database';
+import { encodeEmail } from '../utils/emailEncoder';
 
 const CustomTopBar = () => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [isOpen1, setIsOpen1] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const dropdownRef = useRef(null);
     const dropdownRef1 = useRef(null);
     const dropdownRef2 = useRef(null);
 
     const { email, account, setUserData } = useUserContext();
+    const router = useRouter();
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            fetchCurrentUser(token);
-        }
+        setIsMounted(true);
+        const checkToken = async () => {
+            const token = localStorage.getItem('token');
+            console.log('Checking token:', token); // Debug log
+            if (token) {
+                try {
+                    // First try to fetch current user
+                    let res;
+                    try {
+                        res = await fetch('/api/auth/current-user', {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        });
+                    } catch (networkError) {
+                        console.error('Network error during fetch:', networkError);
+                        return; // Don't proceed if there's a network error
+                    }
+
+                    if (!res.ok) {
+                        if (res.status === 401) {
+                            console.log('Token is invalid or expired');
+                            localStorage.removeItem('token');
+                            setIsAuthenticated(false);
+                            setUserData(null, null);
+                            return;
+                        }
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+
+                    const data = await res.json();
+                    console.log('Current user data:', data); // Debug log
+                    
+                    if (data.username) {
+                        setUserData(data.username, data);
+                        setIsAuthenticated(true);
+                        
+                        // Then try to fetch account details
+                        let accountRes;
+                        try {
+                            accountRes = await fetch(`/api/auth/get-account-by-email?email=${data.username}`, {
+                                method: 'GET',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`,
+                                },
+                            });
+                        } catch (networkError) {
+                            console.error('Network error fetching account:', networkError);
+                            return; // Don't proceed if there's a network error
+                        }
+
+                        if (!accountRes.ok) {
+                            console.error('Failed to fetch account data:', accountRes.status);
+                            return;
+                        }
+
+                        const accountData = await accountRes.json();
+                        console.log('Account data:', accountData); // Debug log
+                        setUserData(data.username, accountData);
+                    } else {
+                        setIsAuthenticated(false);
+                        setUserData(null, null);
+                    }
+                } catch (error) {
+                    console.error('Error in token verification:', error);
+                    // Don't remove token on first error
+                    // Only remove token if we're sure it's invalid
+                }
+            } else {
+                setIsAuthenticated(false);
+                setUserData(null, null);
+            }
+        };
+
+        // Check token immediately and then periodically
+        checkToken();
+        const interval = setInterval(checkToken, 30000); // Check every 30 seconds
+        return () => clearInterval(interval);
     }, []);
 
-    const fetchCurrentUser = async (token) => {
-        try {
-            const res = await fetch('http://localhost:8080/api/auth/current-user', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
+    useEffect(() => {
+        if (isAuthenticated && email) {
+            // Encode email for Firebase path
+            const encodedEmail = encodeEmail(email);
+            // Subscribe to notifications
+            const notificationsRef = ref(database, `notifications/${encodedEmail}`);
+            
+            const unsubscribe = onValue(notificationsRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    const newNotifications = Object.entries(data).map(([id, notification]) => ({
+                        id,
+                        ...notification
+                    }));
+                    const unread = newNotifications.filter(n => !n.read).length;
+                    setNotifications(newNotifications);
+                    setUnreadCount(unread);
+                } else {
+                    setNotifications([]);
+                    setUnreadCount(0);
+                }
             });
 
-            if (!res.ok) {
-                throw new Error('Failed to fetch current user');
-            }
-
-            const data = await res.json();
-            setUserData(data.username, data);
-            setIsAuthenticated(true);
-
-            if (data.username) {
-                fetchAccountByEmail(data.username);
-            }
-        } catch (error) {
-            console.error('Error fetching current user:', error);
-            // Token might be expired or invalid; remove it
-            localStorage.removeItem('token');
-            setIsAuthenticated(false);
+            return () => unsubscribe();
         }
-    };
-
-    const fetchAccountByEmail = async (email) => {
-        try {
-            const res = await fetch(`http://localhost:8080/api/auth/get-account-by-email?email=${email}`);
-            if (!res.ok) throw new Error('Failed to fetch account');
-            const data = await res.json();
-            setUserData(email, data);
-        } catch (error) {
-            console.error("Error fetching account:", error);
-        }
-    };
+    }, [isAuthenticated, email]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -71,13 +142,7 @@ const CustomTopBar = () => {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (
-                (dropdownRef.current && !dropdownRef.current.contains(event.target)) &&
-                (dropdownRef1.current && !dropdownRef1.current.contains(event.target)) &&
-                (dropdownRef2.current && !dropdownRef2.current.contains(event.target))
-            ) {
-                setIsOpen(false);
-                setIsOpen1(false);
+            if (dropdownRef2.current && !dropdownRef2.current.contains(event.target)) {
                 setIsUserMenuOpen(false);
             }
         };
@@ -85,6 +150,30 @@ const CustomTopBar = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const markAsRead = async (notificationId) => {
+        try {
+            const encodedEmail = encodeEmail(email);
+            const notificationRef = ref(database, `notifications/${encodedEmail}/${notificationId}`);
+            await update(notificationRef, {
+                read: true
+            });
+        } catch (error) {
+            console.error('Error marking notification as read:', error);
+        }
+    };
+
+    const handleNotificationClick = (notification) => {
+        markAsRead(notification.id);
+        if (notification.link) {
+            router.push(notification.link);
+        }
+        setShowNotifications(false);
+    };
+
+    if (!isMounted) {
+        return null;
+    }
 
     return (
         <header className="bg-white shadow-md py-3 fixed top-0 left-0 w-full z-50">
@@ -95,46 +184,42 @@ const CustomTopBar = () => {
                     </Link>
                 </div>
 
-                <nav className="flex space-x-8 text-gray-800">
+                <nav className="flex items-center space-x-8 text-gray-800">
                     <Link href="/job" className="hover:text-green-600 text-sm">
                         <p>Jobs</p>
                     </Link>
                     <Link href="/job-recommendation" className="hover:text-green-600 text-sm">
                         <p>Recommendation Jobs</p>
                     </Link>
-                    <div className="relative inline-block text-center" ref={dropdownRef}>
-                        <button onClick={() => setIsOpen((prev) => !prev)} className="hover:text-green-600 text-sm">
+                    <div className="relative inline-block text-center group" ref={dropdownRef}>
+                        <button className="hover:text-green-600 text-sm flex items-center">
                             Profile & CV
                         </button>
-                        {isOpen && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <ul>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/profile" className="text-gray-700">Profile</Link>
-                                    </li>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/cv" className="text-gray-700">CV</Link>
-                                    </li>
-                                </ul>
-                            </div>
-                        )}
+                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300">
+                            <ul>
+                                <li className="px-4 py-2 hover:bg-gray-100">
+                                    <Link href="/profile" className="text-gray-700">Profile</Link>
+                                </li>
+                                <li className="px-4 py-2 hover:bg-gray-100">
+                                    <Link href="/cv" className="text-gray-700">CV</Link>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
-                    <div className="relative inline-block text-center" ref={dropdownRef1}>
-                        <button onClick={() => setIsOpen1((prev) => !prev)} className="hover:text-green-600 text-sm">
+                    <div className="relative inline-block text-center group" ref={dropdownRef1}>
+                        <button className="hover:text-green-600 text-sm flex items-center">
                             Your Jobs
                         </button>
-                        {isOpen1 && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <ul>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/job/saved" className="text-gray-700">Saved Jobs</Link>
-                                    </li>
-                                    <li className="px-4 py-2 hover:bg-gray-100">
-                                        <Link href="/job/applied" className="text-gray-700">Applied Jobs</Link>
-                                    </li>
-                                </ul>
-                            </div>
-                        )}
+                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300">
+                            <ul>
+                                <li className="px-4 py-2 hover:bg-gray-100">
+                                    <Link href="/job/saved" className="text-gray-700">Saved Jobs</Link>
+                                </li>
+                                <li className="px-4 py-2 hover:bg-gray-100">
+                                    <Link href="/job/applied" className="text-gray-700">Applied Jobs</Link>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                     <Link href="/company" className="hover:text-green-600 text-sm">
                         <p>Company</p>
@@ -148,7 +233,10 @@ const CustomTopBar = () => {
                     <div className="flex space-x-4">
                         {isAuthenticated ? (
                             <div className="relative" ref={dropdownRef2}>
-                                <button onClick={() => setIsUserMenuOpen((prev) => !prev)} className="flex items-center space-x-2 focus:outline-none">
+                                <button 
+                                    onClick={() => setIsUserMenuOpen((prev) => !prev)} 
+                                    className="flex items-center space-x-2 focus:outline-none"
+                                >
                                     <img className="h-8 w-8 rounded-full" src={account?.avatar} alt="User Profile" />
                                 </button>
                                 {isUserMenuOpen && (
@@ -168,6 +256,64 @@ const CustomTopBar = () => {
                             <Link href="/candidate/login" className="hover:text-green-600 text-sm text-black">
                                 Login Here
                             </Link>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowNotifications(!showNotifications)}
+                            className="relative p-2 text-gray-600 hover:text-gray-900 focus:outline-none"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-6 w-6"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                                />
+                            </svg>
+                            {unreadCount > 0 && (
+                                <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {showNotifications && (
+                            <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-50">
+                                <div className="py-1">
+                                    {notifications.length === 0 ? (
+                                        <div className="px-4 py-2 text-sm text-gray-700">
+                                            No notifications
+                                        </div>
+                                    ) : (
+                                        notifications.map((notification) => (
+                                            <div
+                                                key={notification.id}
+                                                onClick={() => handleNotificationClick(notification)}
+                                                className={`px-4 py-2 text-sm cursor-pointer ${
+                                                    notification.read
+                                                        ? 'text-gray-700 hover:bg-gray-100'
+                                                        : 'text-gray-900 bg-blue-50 hover:bg-blue-100'
+                                                }`}
+                                            >
+                                                <div className="font-medium">{notification.title}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {new Date(notification.timestamp?.toDate()).toLocaleString()}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>

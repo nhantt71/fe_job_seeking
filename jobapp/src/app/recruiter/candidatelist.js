@@ -21,7 +21,7 @@ const CandidatesList = () => {
 
     const fetchAvailableCandidates = async () => {
         try {
-            const response = await fetch('http://localhost:8080/api/candidate/get-available-candidates');
+            const response = await fetch('/api/candidate/get-available-candidates');
             const data = await response.json();
 
             const candidatesWithStatus = await Promise.all(
@@ -41,7 +41,7 @@ const CandidatesList = () => {
     const fetchSavedStatus = async (candidateId) => {
         try {
             const response = await fetch(
-                `http://localhost:8080/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
+                `/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
             );
             return await response.json();
         } catch (error) {
@@ -52,8 +52,8 @@ const CandidatesList = () => {
 
     const handleSaveToggle = async (candidateId, isCurrentlySaved) => {
         const url = isCurrentlySaved
-            ? `http://localhost:8080/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
-            : `http://localhost:8080/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
+            ? `/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
+            : `/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
 
         try {
             await fetch(url, { method: 'POST' });
@@ -70,11 +70,11 @@ const CandidatesList = () => {
             fetchAvailableCandidates();
         } else {
             try {
-                const response = await fetch(`http://localhost:8080/api/candidate/search?${queryParams}`);
+                const response = await fetch(`/api/candidate/search?${queryParams}`);
                 const candidateIds = await response.json();
 
                 if (candidateIds && candidateIds.length > 0) {
-                    const detailedResponse = await fetch(`http://localhost:8080/api/candidate/get-search-candidates`, {
+                    const detailedResponse = await fetch(`/api/candidate/get-search-candidates`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

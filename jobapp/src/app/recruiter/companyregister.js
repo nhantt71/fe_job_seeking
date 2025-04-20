@@ -24,7 +24,7 @@ export function CompanyRegister({ account }) {
     useEffect(() => {
         const fetchCompanies = async () => {
             try {
-                const response = await fetch('http://localhost:8080/api/companies');
+                const response = await fetch('/api/companies');
                 const companies = await response.json();
                 setExistingCompanies(companies);
             } catch (err) {
@@ -66,7 +66,7 @@ export function CompanyRegister({ account }) {
         }
 
         try {
-            const response = await fetch('http://localhost:8080/api/companies', {
+            const response = await fetch('/api/companies', {
                 method: 'POST',
                 body: formData,
             });

@@ -23,7 +23,7 @@ export default function ApplyJob() {
 
     useEffect(() => {
         if (email) {
-            fetch(`http://localhost:8080/api/candidate/get-candidate-by-email?email=${email}`)
+            fetch(`/api/candidate/get-candidate-by-email?email=${email}`)
                 .then(res => res.json())
                 .then(data => {
                     setCandidate(data);
@@ -36,7 +36,7 @@ export default function ApplyJob() {
 
     useEffect(() => {
         if (candidate) {
-            fetch(`http://localhost:8080/api/cv/get-cvs-by-candidate-id/${candidate.id}`)
+            fetch(`/api/cv/get-cvs-by-candidate-id/${candidate.id}`)
                 .then(res => res.json())
                 .then(data => {
                     setCvList(data);
@@ -48,7 +48,7 @@ export default function ApplyJob() {
 
     useEffect(() => {
         if (id) {
-            fetch(`http://localhost:8080/api/job/detail/${id}`)
+            fetch(`/api/job/detail/${id}`)
                 .then((res) => res.json())
                 .then((data) => {
                     setJob(data);
@@ -83,7 +83,7 @@ export default function ApplyJob() {
             formData.append('cvFile', uploadCV);
 
             try {
-                const response = await fetch(`http://localhost:8080/api/job/apply-with-file`, {
+                const response = await fetch(`/api/job/apply-with-file`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -101,7 +101,7 @@ export default function ApplyJob() {
             }
         } else if (selectedCV) {
             try {
-                const fetchFileCV = await fetch(`http://localhost:8080/api/cv/get-fileCV-by-CV-id/${selectedCV}`);
+                const fetchFileCV = await fetch(`/api/cv/get-fileCV-by-CV-id/${selectedCV}`);
                 
                 if (!fetchFileCV.ok) {
                     alert('Không thể lấy fileCV cho CV đã chọn.');
@@ -110,7 +110,7 @@ export default function ApplyJob() {
         
                 const fileCV = await fetchFileCV.text();
         
-                const response = await fetch(`http://localhost:8080/api/job/apply?jobId=${job.id}&candidateId=${candidate.id}&applicantName=${candidate.fullname}&applicantEmail=${email}&selfMail=${coverLetter}&cvFile=${fileCV}`, {
+                const response = await fetch(`/api/job/apply?jobId=${job.id}&candidateId=${candidate.id}&applicantName=${candidate.fullname}&applicantEmail=${email}&selfMail=${coverLetter}&cvFile=${fileCV}`, {
                     method: 'POST',
                 });
         
