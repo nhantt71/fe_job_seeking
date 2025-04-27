@@ -15,95 +15,89 @@ const CustomTopBar = () => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [avatar, setAvatar] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     const dropdownRef = useRef(null);
     const dropdownRef1 = useRef(null);
     const dropdownRef2 = useRef(null);
 
-    const { email, account, setUserData } = useUserContext();
+    const { email, account, role, setUserData } = useUserContext();
+
     const router = useRouter();
 
     useEffect(() => {
         setIsMounted(true);
         const checkToken = async () => {
             const token = localStorage.getItem('token');
-            console.log('Checking token:', token); // Debug log
-            if (token) {
-                try {
-                    // First try to fetch current user
-                    let res;
-                    try {
-                        res = await fetch('/api/auth/current-user', {
-                            method: 'GET',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        });
-                    } catch (networkError) {
-                        console.error('Network error during fetch:', networkError);
-                        return; // Don't proceed if there's a network error
-                    }
-
-                    if (!res.ok) {
-                        if (res.status === 401) {
-                            console.log('Token is invalid or expired');
-                            localStorage.removeItem('token');
-                            setIsAuthenticated(false);
-                            setUserData(null, null);
-                            return;
-                        }
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-
-                    const data = await res.json();
-                    console.log('Current user data:', data); // Debug log
-                    
-                    if (data.username) {
-                        setUserData(data.username, data);
-                        setIsAuthenticated(true);
-                        
-                        // Then try to fetch account details
-                        let accountRes;
-                        try {
-                            accountRes = await fetch(`/api/auth/get-account-by-email?email=${data.username}`, {
-                                method: 'GET',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`,
-                                },
-                            });
-                        } catch (networkError) {
-                            console.error('Network error fetching account:', networkError);
-                            return; // Don't proceed if there's a network error
-                        }
-
-                        if (!accountRes.ok) {
-                            console.error('Failed to fetch account data:', accountRes.status);
-                            return;
-                        }
-
-                        const accountData = await accountRes.json();
-                        console.log('Account data:', accountData); // Debug log
-                        setUserData(data.username, accountData);
-                    } else {
-                        setIsAuthenticated(false);
-                        setUserData(null, null);
-                    }
-                } catch (error) {
-                    console.error('Error in token verification:', error);
-                    // Don't remove token on first error
-                    // Only remove token if we're sure it's invalid
-                }
-            } else {
+            setIsLoading(true);
+            if (!token) {
                 setIsAuthenticated(false);
                 setUserData(null, null);
+                setAvatar(null);
+                setIsLoading(false);
+                return;
             }
+            try {
+                // Fetch current user
+                const res = await fetch('/api/auth/current-user', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                if (!res.ok) {
+                    localStorage.removeItem('token');
+                    setIsAuthenticated(false);
+                    setUserData(null, null);
+                    setAvatar(null);
+                    setIsLoading(false);
+                    return;
+                }
+                const data = await res.json();
+                if (data.username) {
+                    // Fetch account details
+                    const accountRes = await fetch(`/api/auth/get-account-by-email?email=${data.username}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                    });
+                    if (!accountRes.ok) {
+                        setIsAuthenticated(false);
+                        setUserData(null, null);
+                        setAvatar(null);
+                        setIsLoading(false);
+                        return;
+                    }
+                    const accountData = await accountRes.json();
+                    setUserData(data.username, accountData, accountData.role);
+
+                    // Use accountData.role directly, not the possibly stale "role" from context
+                    if (accountData.role === 'CANDIDATE') {
+                        setIsAuthenticated(true);
+                        setAvatar(accountData.avatar);
+                    } else {
+                        setIsAuthenticated(false);
+                        setAvatar(null);
+                    }
+                } else {
+                    setIsAuthenticated(false);
+                    setUserData(null, null);
+                    setAvatar(null);
+                }
+            } catch (error) {
+                setIsAuthenticated(false);
+                setUserData(null, null);
+                setAvatar(null);
+            }
+            setIsLoading(false);
         };
 
-        // Check token immediately and then periodically
         checkToken();
-        const interval = setInterval(checkToken, 30000); // Check every 30 seconds
+        const interval = setInterval(checkToken, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -113,7 +107,7 @@ const CustomTopBar = () => {
             const encodedEmail = encodeEmail(email);
             // Subscribe to notifications
             const notificationsRef = ref(database, `notifications/${encodedEmail}`);
-            
+
             const unsubscribe = onValue(notificationsRef, (snapshot) => {
                 const data = snapshot.val();
                 if (data) {
@@ -231,13 +225,13 @@ const CustomTopBar = () => {
                         Bạn là nhà tuyển dụng? <span className="font-semibold">Đăng tuyển ngay</span>
                     </Link>
                     <div className="flex space-x-4">
-                        {isAuthenticated ? (
+                        {isAuthenticated && avatar ? (
                             <div className="relative" ref={dropdownRef2}>
                                 <button 
                                     onClick={() => setIsUserMenuOpen((prev) => !prev)} 
                                     className="flex items-center space-x-2 focus:outline-none"
                                 >
-                                    <img className="h-8 w-8 rounded-full" src={account?.avatar} alt="User Profile" />
+                                    <img className="h-8 w-8 rounded-full" src={avatar} alt="User Profile" />
                                 </button>
                                 {isUserMenuOpen && (
                                     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
@@ -299,11 +293,10 @@ const CustomTopBar = () => {
                                             <div
                                                 key={notification.id}
                                                 onClick={() => handleNotificationClick(notification)}
-                                                className={`px-4 py-2 text-sm cursor-pointer ${
-                                                    notification.read
-                                                        ? 'text-gray-700 hover:bg-gray-100'
-                                                        : 'text-gray-900 bg-blue-50 hover:bg-blue-100'
-                                                }`}
+                                                className={`px-4 py-2 text-sm cursor-pointer ${notification.read
+                                                    ? 'text-gray-700 hover:bg-gray-100'
+                                                    : 'text-gray-900 bg-blue-50 hover:bg-blue-100'
+                                                    }`}
                                             >
                                                 <div className="font-medium">{notification.title}</div>
                                                 <div className="text-xs text-gray-500">

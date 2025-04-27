@@ -1,8 +1,8 @@
+'use client'
+
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiUser, FiLock, FiLoader, FiAlertCircle } from 'react-icons/fi';
-import { FaGoogle, FaGithub } from 'react-icons/fa';
-import { signIn } from "next-auth/react";
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -79,7 +79,7 @@ export default function Login() {
                 throw new Error('Failed to store token');
             }
 
-            router.push(responseData.role === 'ROLE_CANDIDATE' ? '/' : '/');
+            router.push(responseData.role === 'ROLE_RECRUITER' ? '/recruiter' : '/');
         } catch (err) {
             console.error('Login error:', err);
             setError(err.message);
@@ -89,7 +89,7 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
             <div className="w-full max-w-md bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="bg-indigo-600 py-6 px-8 text-center">
                     <h1 className="text-2xl font-bold text-white">Welcome Back</h1>
@@ -103,32 +103,6 @@ export default function Login() {
                             <span className="text-sm">{error}</span>
                         </div>
                     )}
-
-                    <div className="flex gap-4 mb-6 justify-center">
-                        <button
-                            onClick={() => signIn("google")}
-                            className="w-16 h-16 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                            <FaGoogle className="text-red-500 text-2xl" />
-                        </button>
-                        <button
-                            onClick={() => signIn("github")}
-                            className="w-16 h-16 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                            <FaGithub className="text-gray-800 text-2xl" />
-                        </button>
-                    </div>
-
-                    <div className="relative mb-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center">
-                            <span className="px-2 bg-white text-sm text-gray-500">
-                                OR
-                            </span>
-                        </div>
-                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div>
@@ -213,7 +187,7 @@ export default function Login() {
 
                         <div className="mt-4 text-center">
                             <a
-                                href="/candidate/register"
+                                href="/recruiter/register"
                                 className="text-indigo-600 hover:text-indigo-500 font-medium text-sm"
                             >
                                 Create a new account

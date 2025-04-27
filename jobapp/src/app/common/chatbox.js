@@ -32,7 +32,14 @@ const ChatBox = () => {
                 });
 
                 if (response.ok) {
-                    setIsAuthenticated(true);
+                    const data = await response.json();
+                    if (data.username) {
+                        setIsAuthenticated(true);
+                        // Load existing messages if authenticated
+                        loadMessages();
+                    } else {
+                        setIsAuthenticated(false);
+                    }
                 } else {
                     localStorage.removeItem('token');
                     setIsAuthenticated(false);
@@ -48,6 +55,28 @@ const ChatBox = () => {
         checkAuth();
     }, []);
 
+    const loadMessages = async () => {
+        if (!isAuthenticated) return;
+        
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/chat/messages', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setMessages(data);
+            }
+        } catch (error) {
+            console.error('Error loading messages:', error);
+        }
+    };
+
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
@@ -56,23 +85,43 @@ const ChatBox = () => {
         scrollToBottom();
     }, [messages]);
 
-    const handleSendMessage = (e) => {
+    const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() || !isAuthenticated) return;
 
-        const message = {
-            id: Date.now(),
-            text: newMessage,
-            sender: email,
-            timestamp: new Date().toLocaleTimeString(),
-        };
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/chat/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    message: newMessage,
+                    sender: email,
+                }),
+            });
 
-        setMessages([...messages, message]);
-        setNewMessage('');
+            if (response.ok) {
+                const message = {
+                    id: Date.now(),
+                    text: newMessage,
+                    sender: email,
+                    timestamp: new Date().toLocaleTimeString(),
+                };
+                setMessages([...messages, message]);
+                setNewMessage('');
+            } else {
+                throw new Error('Failed to send message');
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
     };
 
     if (isLoading) {
-        return null; // or a loading spinner
+        return null;
     }
 
     return (

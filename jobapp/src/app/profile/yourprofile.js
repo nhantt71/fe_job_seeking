@@ -52,33 +52,50 @@ export default function YourProfile() {
         });
     }, []);
 
-    const fetchCandidateData = (email) => {
-        fetch(`/api/candidate/get-candidate-by-email?email=${email}`)
-            .then(res => res.json())
-            .then(data => {
-                setCandidate(data);
-                if (data) {
-                    setFullname(data.fullname || '');
-                    setPhonenumber(data.phoneNumber || '');
-                    setSearchStatus(data.available);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching candidate:', error);
+    const fetchCandidateData = async (email) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/candidate/get-candidate-by-email?email=${email}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
             });
+
+            if (response.ok) {
+                const data = await response.json();
+                setCandidate(data);
+                setFullname(data.fullname || '');
+                setPhonenumber(data.phoneNumber || '');
+                setSearchStatus(data.searchStatus || false);
+                setAvatar(data.avatar || null);
+                fetchCVList(data.id);
+            }
+        } catch (error) {
+            console.error('Error fetching candidate data:', error);
+        }
     };
 
-    useEffect(() => {
-        if (candidate) {
-            fetch(`/api/cv/get-cvs-by-candidate-id/${candidate.id}`)
-                .then(res => res.json())
-                .then(data => {
-                    setCvList(data);
-                }).catch(err => {
-                    console.error(err);
-                });
+    const fetchCVList = async (candidateId) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/cv/get-cvs-by-candidate-id/${candidateId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setCvList(data);
+            }
+        } catch (error) {
+            console.error('Error fetching CV list:', error);
         }
-    }, [candidate]);
+    };
 
     const handleAvatarChange = (event) => {
         const file = event.target.files[0];
@@ -234,13 +251,37 @@ export default function YourProfile() {
     };
     
 
-    const handleCvSelect = event => {
-        const cvId = parseInt(event.target.value, 10);
+    const handleCvSelect = async (event) => {
+        const cvId = event.target.value;
+        if (!cvId) return;
+
         if (searchStatus) {
-            alert("Bạn cần tắt trạng thái tìm việc trước khi thay đổi CV chính.");
+            alert("You need to disable job search status before changing your main CV.");
             return;
         }
-        setSelectedCvId(cvId);
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/cv/make-main-cv?id=${cvId}&candidateId=${candidate.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.ok) {
+                setSelectedCvId(cvId);
+                alert('Main CV updated successfully');
+                // Refresh CV list to update the main CV status
+                fetchCVList(candidate.id);
+            } else {
+                throw new Error('Failed to set main CV');
+            }
+        } catch (error) {
+            console.error('Error setting main CV:', error);
+            alert('Failed to set main CV');
+        }
     };
 
     if (!isAuthenticated) {
@@ -362,24 +403,24 @@ export default function YourProfile() {
                     {/* CV Selection */}
                     {cvList.length > 0 ? (
                         <div className="mb-4">
-                            <h3 className="text-lg font-semibold mb-2">Chọn CV chính</h3>
+                            <h3 className="text-lg font-semibold mb-2">Select Main CV</h3>
                             <select
                                 value={selectedCvId || ''}
                                 onChange={handleCvSelect}
                                 className="w-full px-4 py-2 border rounded-lg"
-                                disabled={searchStatus} // Disable when searchStatus is true
+                                disabled={searchStatus}
                             >
-                                <option value="" disabled>Chọn CV của bạn</option>
+                                <option value="" disabled>Select your CV</option>
                                 {cvList.map(cv => (
                                     <option key={cv.id} value={cv.id}>
-                                        {cv.name}
+                                        {cv.name || cv.title} {cv.mainCV ? '(Main CV)' : ''}
                                     </option>
                                 ))}
                             </select>
                         </div>
                     ) : (
                         <div className="mt-4">
-                            <p className="text-gray-600">Bạn chưa có CV nào.</p>
+                            <p className="text-gray-600">You don't have any CVs yet.</p>
                             <Link href="/cv">
                                 <button className="bg-blue-500 text-white px-4 py-2 rounded-md">
                                     Upload CV

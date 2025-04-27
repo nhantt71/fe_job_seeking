@@ -10,7 +10,8 @@ const RecruiterCustomTopBar = () => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const { email, account, setUserData } = useUserContext();
-    const { recruiter, setRecruiterData } = useRecruiterContext();
+    const context = useRecruiterContext();
+    const { recruiter = null } = context || {};
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -70,7 +71,7 @@ const RecruiterCustomTopBar = () => {
             const res = await fetch(`/api/recruiter/get-recruiter-by-email?email=${email}`);
             if (!res.ok) throw new Error('Failed to fetch recruiter');
             const data = await res.json();
-            setRecruiterData(data);
+            context?.setRecruiterData(data);
         } catch (error) {
             console.error("Error fetching recruiter:", error);
         }
@@ -115,9 +116,6 @@ const RecruiterCustomTopBar = () => {
                     </Link>
                     <Link href="/recruiter/saved-candidates" className="hover:text-green-600 text-sm">
                         <p>Saved Candidates</p>
-                    </Link>
-                    <Link href="/recruiter/members" className="hover:text-green-600 text-sm">
-                        <p>Members</p>
                     </Link>
                 </nav>
 
