@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useUserContext } from '../context/usercontext';
 import { useRouter } from 'next/navigation';
+import { getFirestore, doc, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import {app} from '@/app/firebase';
 
 export default function YourProfile() {
-    const { email, account, setUserData } = useUserContext();
+    const { email, account, setUserData, mainCVIdForJobs, setMainCVIdForJobs } = useUserContext();
     const [searchStatus, setSearchStatus] = useState(false);
     const [avatar, setAvatar] = useState(null);
     const [fullname, setFullname] = useState('');
@@ -15,7 +17,12 @@ export default function YourProfile() {
     const [cvList, setCvList] = useState([]);
     const [selectedCvId, setSelectedCvId] = useState(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [length, setLength] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('profile');
     const router = useRouter();
+    const { recommendationCvId, setRecommendationCvId } = useUserContext();
+    const db = getFirestore(app);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -24,7 +31,7 @@ export default function YourProfile() {
             return;
         }
 
-        // Verify token with backend
+        setIsLoading(true);
         fetch('/api/auth/current-user', {
             method: 'GET',
             headers: {
@@ -32,24 +39,25 @@ export default function YourProfile() {
                 'Authorization': `Bearer ${token}`,
             },
         })
-        .then(res => {
-            if (!res.ok) {
-                throw new Error('Token expired or invalid');
-            }
-            return res.json();
-        })
-        .then(data => {
-            setUserData(data.username, data);
-            setIsAuthenticated(true);
-            if (data.username) {
-                fetchCandidateData(data.username);
-            }
-        })
-        .catch(error => {
-            console.error('Error verifying token:', error);
-            localStorage.removeItem('token');
-            setIsAuthenticated(false);
-        });
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Token expired or invalid');
+                }
+                return res.json();
+            })
+            .then(data => {
+                setUserData(data.username, data);
+                setIsAuthenticated(true);
+                if (data.username) {
+                    fetchCandidateData(data.username);
+                }
+            })
+            .catch(error => {
+                console.error('Error verifying token:', error);
+                localStorage.removeItem('token');
+                setIsAuthenticated(false);
+            })
+            .finally(() => setIsLoading(false));
     }, []);
 
     const fetchCandidateData = async (email) => {
@@ -68,7 +76,7 @@ export default function YourProfile() {
                 setCandidate(data);
                 setFullname(data.fullname || '');
                 setPhonenumber(data.phoneNumber || '');
-                setSearchStatus(data.searchStatus || false);
+                setSearchStatus(data.available || false);
                 setAvatar(data.avatar || null);
                 fetchCVList(data.id);
             }
@@ -91,6 +99,13 @@ export default function YourProfile() {
             if (response.ok) {
                 const data = await response.json();
                 setCvList(data);
+                // Find and set the main CV
+                const mainCv = data.find(cv => cv.mainCV);
+                if (mainCv) {
+                    setSelectedCvId(mainCv.id);
+                    setMainCVIdForJobs(mainCv.id);
+                    setRecommendationCvId(mainCv.id);
+                }
             }
         } catch (error) {
             console.error('Error fetching CV list:', error);
@@ -169,87 +184,245 @@ export default function YourProfile() {
             });
     };
 
+
+    const updateFirebaseNotification = async (searchStatus, recommendationsCount = null) => {
+        try {
+            const notificationsRef = collection(db, 'notifications', email, 'items');
+            
+            if (searchStatus && recommendationsCount !== null) {
+                // Combined notification for enabling job search and recommendations
+                await addDoc(notificationsRef, {
+                    email,
+                    action: 'EnableWithRecommendations',
+                    cvId: selectedCvId,
+                    numb_recommendation: recommendationsCount,
+                    read: false,
+                    timestamp: serverTimestamp()
+                });
+            } else {
+                // Standard status change notification
+                await addDoc(notificationsRef, {
+                    email,
+                    action: searchStatus ? 'Enable' : 'Disable',
+                    cvId: selectedCvId,
+                    read: false,
+                    timestamp: serverTimestamp()
+                });
+            }
+        } catch (error) {
+            console.error('Error updating Firebase notification:', error);
+        }
+    };
+
     const toggleSearchStatus = () => {
         if (!selectedCvId) {
-            alert("Bạn cần chọn CV chính trước khi bật trạng thái tìm kiếm việc làm.");
+            alert("You need to select the main CV before turning on job search status.");
             return;
         }
-    
-        const enableUrl = `/api/candidate/enable-finding-jobs/${candidate.id}`;
-        const disableUrl = `/api/candidate/disable-finding-jobs/${candidate.id}`;
-        const toggleUrl = searchStatus ? disableUrl : enableUrl;
-    
-        fetch(toggleUrl, { method: 'POST' })
-            .then(res => {
-                if (!res.ok) throw new Error('Failed to toggle job search status');
-                return res.json();
-            })
-            .then(() => {
-                setSearchStatus(!searchStatus);
-    
-                if (!searchStatus) {
-                    fetch(`/api/cv/make-main-cv?id=${selectedCvId}&candidateId=${candidate.id}`, {
-                        method: 'POST',
-                    })
-                        .then(res => {
-                            if (!res.ok) throw new Error('Failed to mark CV as main');
-                            return res.json();
+
+        const confirmMessage = searchStatus 
+            ? "Are you sure you want to turn off job search status? This will make your profile less visible to employers."
+            : "Are you sure you want to turn on job search status? This will make your profile visible to employers.";
+
+        if (window.confirm(confirmMessage)) {
+            const enableUrl = `/api/candidate/enable-finding-jobs/${candidate.id}`;
+            const disableUrl = `/api/candidate/disable-finding-jobs/${candidate.id}`;
+            const toggleUrl = searchStatus ? disableUrl : enableUrl;
+
+            fetch(toggleUrl, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error('Failed to toggle job search status');
+                    const contentType = res.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        return res.json();
+                    }
+                    return res.text();
+                })
+                .then(() => {
+                    const newStatus = !searchStatus;
+                    setSearchStatus(newStatus);
+                    // Update Firebase notification
+                    updateFirebaseNotification(newStatus);
+
+                    if (!searchStatus) {
+                        fetch(`/api/cv/make-main-cv?id=${selectedCvId}&candidateId=${candidate.id}`, {
+                            method: 'POST',
                         })
-                        .then(() => {
-                            return fetch(`/api/cv/get-fileCV-by-CV-id/${selectedCvId}`);
-                        })
-                        .then(res => {
-                            if (!res.ok) throw new Error('Failed to retrieve CV URL');
-                            return res.text();
-                        })
-                        .then(cvUrl => {
-                            return fetch(`/api/extract-text-from-url/${candidate.id}?imageUrl=${encodeURIComponent(cvUrl)}`, {
-                                method: 'POST'
+                            .then(res => {
+                                setRecommendationCvId(selectedCvId);
+                                setMainCVIdForJobs(selectedCvId);
+                                
+                                // Store the CV ID and fetch time in localStorage
+                                localStorage.setItem('mainCvId', selectedCvId);
+                                localStorage.setItem('mainCvIdFetchTime', new Date().getTime().toString());
+                                
+                                if (!res.ok) throw new Error('Failed to mark CV as main');
+                                const contentType = res.headers.get("content-type");
+                                if (contentType && contentType.includes("application/json")) {
+                                    return res.json();
+                                }
+                                return res.text();
+                            })
+                            .then(() => {
+                                return fetch(`/api/cv/get-fileCV-by-CV-id/${selectedCvId}`);
+                            })
+                            .then(res => {
+                                if (!res.ok) throw new Error('Failed to retrieve CV URL');
+                                return res.text();
+                            })
+                            .then(cvUrl => {
+                                return fetch(`/api/ocr/extract/${candidate.id}?fileUrl=${encodeURIComponent(cvUrl)}`, {
+                                    method: 'POST'
+                                });
+                            })
+                            .then(res => {
+                                if (!res.ok) throw new Error('Failed to extract text from CV URL');
+                                return res.text();
+                            })
+                            .then(data => {
+                                return fetch(`http://127.0.0.1:8000/api/analyze/cv`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        cv_text: data,
+                                        cv_id: selectedCvId,
+                                    }),
+                                });
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error(`API request failed with status ${response.status}`);
+                                }
+                                return response.json();
+                            })
+                            .then(data => {
+                                // Get the recommendations count
+                                const recommendationsCount = Array.isArray(data) ? data.length : 0;
+                                setLength(recommendationsCount);
+                                
+                                // Now update the search status in the database
+                                updateFirebaseNotification(true, recommendationsCount);
+                                
+                                // Finally update the UI
+                                setSearchStatus(true);
+                                alert(`Job search status has been enabled successfully! We found ${recommendationsCount} job recommendations for you.`);
+                            })
+                            .catch(error => {
+                                console.error('Error processing CV for job search:', error);
+                                alert('Error processing CV for job search.');
                             });
-                        })
-                        .then(res => {
-                            if (!res.ok) throw new Error('Failed to extract text from CV URL');
-                            return res.text();
-                        })
-                        .then(data => {
-                            alert(`Job search enabled, CV processed: ${data}`);
-                        })
-                        .catch(error => {
-                            console.error('Error processing CV for job search:', error);
-                            alert('Error processing CV for job search.');
-                        });
-                } else {
-                    fetch(`/api/cv/unmake-all-main-cv?candidateId=${candidate.id}`, {
-                        method: 'POST',
-                    })
-                        .then(res => {
-                            if (!res.ok) throw new Error('Failed to unmark all CVs as main');
-                            return res.json();
-                        })
-                        .then(() => {
-                            return fetch(`/api/extract-cv/delete-by-candidate-id/${candidate.id}`, {
-                                method: 'DELETE'
+                    } else {
+                        // Delete job matches when turning off job search status
+                        if (recommendationCvId) {
+                            fetch(`/api/cv-job-matches/delete/${recommendationCvId}`, {
+                                method: 'DELETE',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                                }
+                            })
+                            .then(res => {
+                                if (!res.ok) {
+                                    console.warn(`Failed to delete job matches for CV ID ${recommendationCvId}: ${res.status}`);
+                                }
+                                return res.text();
+                            })
+                            .catch(error => {
+                                console.error('Error deleting job matches:', error);
                             });
+                        }
+                        
+                        // Delete Redis cache keys when turning off job search status
+                        if (recommendationCvId) {
+                            try {
+                                // Delete recommend:cv:{cvId} cache key
+                                const cacheKeyToCheck = `recommend:cv:${recommendationCvId}`;
+                                fetch(`http://127.0.0.1:8000/api/cache/check-exists?key=${cacheKeyToCheck}`)
+                                    .then(res => {
+                                        if (!res.ok) {
+                                            console.warn(`Failed to check cache key existence: ${res.status}`);
+                                            return false;
+                                        }
+                                        return res.json();
+                                    })
+                                    .then(cacheExists => {
+                                        if (cacheExists) {
+                                            return fetch(`http://127.0.0.1:8000/api/cache/delete?key=${cacheKeyToCheck}`, {
+                                                method: 'DELETE'
+                                            });
+                                        }
+                                    })
+                                    .then(res => {
+                                        if (res && res.ok) {
+                                            console.log(`Successfully deleted cache key: ${cacheKeyToCheck}`);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error deleting Redis cache key:', error);
+                                    });
+                                
+                                // Delete nli_analysis:cv:{cvId} cache key
+                                const cacheKey2ToCheck = `nli_analysis:cv:${recommendationCvId}`;
+                                fetch(`http://127.0.0.1:8000/api/cache/check-exists?key=${cacheKey2ToCheck}`)
+                                    .then(res => {
+                                        if (!res.ok) {
+                                            console.warn(`Failed to check cache key existence: ${res.status}`);
+                                            return false;
+                                        }
+                                        return res.json();
+                                    })
+                                    .then(cacheExists => {
+                                        if (cacheExists) {
+                                            return fetch(`http://127.0.0.1:8000/api/cache/delete?key=${cacheKey2ToCheck}`, {
+                                                method: 'DELETE'
+                                            });
+                                        }
+                                    })
+                                    .then(res => {
+                                        if (res && res.ok) {
+                                            console.log(`Successfully deleted cache key: ${cacheKey2ToCheck}`);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error deleting Redis cache key:', error);
+                                    });
+                            } catch (error) {
+                                console.error('Error managing Redis cache:', error);
+                            }
+                        }
+                        
+                        fetch(`/api/cv/unmake-all-main-cv?candidateId=${candidate.id}`, {
+                            method: 'POST',
                         })
-                        .then(res => {
-                            if (!res.ok) throw new Error('Failed to delete extracted CV data');
-                            return res.text();
-                        })
-                        .then(data => {
-                            alert('Job search disabled, CV data deleted.');
-                        })
-                        .catch(error => {
-                            console.error('Error deleting CV data:', error);
-                            alert('Failed to delete CV data.');
-                        });
-                }
-            })
-            .catch(error => {
-                console.error('Error toggling job search status:', error);
-                alert('Failed to toggle job search status. Please try again.');
-            });
+                            .then(res => {
+                                if (!res.ok) throw new Error('Failed to unmark all CVs as main');
+                                const contentType = res.headers.get("content-type");
+                                if (contentType && contentType.includes("application/json")) {
+                                    return res.json();
+                                }
+                                return res.text();
+                            })
+                            .then(() => {
+                                // Clear the localStorage entries for mainCvId
+                                localStorage.removeItem('mainCvId');
+                                localStorage.removeItem('mainCvIdFetchTime');
+                                
+                                alert('Job search status has been disabled successfully!');
+                            })
+                            .catch(error => {
+                                console.error('Error disabling job search:', error);
+                                alert('Failed to disable job search status.');
+                            });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error toggling job search status:', error);
+                    alert('Failed to toggle job search status. Please try again.');
+                });
+        }
     };
-    
 
     const handleCvSelect = async (event) => {
         const cvId = event.target.value;
@@ -272,9 +445,21 @@ export default function YourProfile() {
 
             if (response.ok) {
                 setSelectedCvId(cvId);
+                setMainCVIdForJobs(cvId);
+                setRecommendationCvId(cvId);
+                
+                // Store the CV ID and fetch time in localStorage
+                localStorage.setItem('mainCvId', cvId);
+                localStorage.setItem('mainCvIdFetchTime', new Date().getTime().toString());
+
+                // Update the CV list to reflect the new main CV
+                setCvList(prevList =>
+                    prevList.map(cv => ({
+                        ...cv,
+                        mainCV: cv.id === cvId
+                    }))
+                );
                 alert('Main CV updated successfully');
-                // Refresh CV list to update the main CV status
-                fetchCVList(candidate.id);
             } else {
                 throw new Error('Failed to set main CV');
             }
@@ -286,12 +471,17 @@ export default function YourProfile() {
 
     if (!isAuthenticated) {
         return (
-            <div className="container mx-auto p-4 text-black">
-                <div className="bg-white shadow-md rounded-lg p-6 text-center">
-                    <h2 className="text-xl font-bold mb-4">Please Login to View Your Profile</h2>
-                    <p className="mb-4">You need to be logged in to view your profile information.</p>
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+                    <div className="mb-6">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Please Login to View Your Profile</h2>
+                    <p className="text-gray-600 mb-6">You need to be logged in to access your profile information.</p>
                     <Link href="/candidate/login">
-                        <button className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                        <button className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg">
                             Go to Login
                         </button>
                     </Link>
@@ -300,151 +490,377 @@ export default function YourProfile() {
         );
     }
 
-    return (
-        <div className="container mx-auto p-4 text-black">
-            <div className="flex space-x-4">
-                {/* Left Side Cards */}
-                <div className="w-2/3 space-y-4">
-                    {/* Account Card */}
-                    <div className="bg-white shadow-md rounded-lg p-5">
-                        <h2 className="text-xl font-bold mb-4">Account</h2>
-
-                        {/* Avatar Section */}
-                        <div className="flex items-center mb-4">
-                            <img
-                                src={account?.avatar || '/path/to/default-avatar.png'}
-                                alt="Avatar"
-                                className="w-20 h-20 rounded-full object-cover mr-4"
-                            />
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleAvatarChange}
-                                className="text-sm text-gray-600"
-                            />
-                        </div>
-
-                        {/* Email Section */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Email
-                            </label>
-                            <input
-                                type="email"
-                                value={email}
-                                disabled
-                                className="w-full px-4 py-2 border rounded-lg bg-gray-100 cursor-not-allowed"
-                            />
-                        </div>
-
-                        {/* Save Button */}
-                        <button className="bg-blue-500 text-white px-4 py-2 rounded-md mr-2"
-                            onClick={saveAvatar}>
-                            Save
-                        </button>
-
-                        {/* Change Password Button */}
-                        <Link href="/profile/changepassword">
-                            <button className="bg-red-500 text-white px-4 py-2 rounded-md">
-                                Change Password
-                            </button>
-                        </Link>
-                    </div>
-
-                    {/* Information Card */}
-                    <div className="bg-white shadow-md rounded-lg p-5">
-                        <h2 className="text-xl font-bold mb-4">Information</h2>
-
-                        {/* Fullname Section */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Full Name
-                            </label>
-                            <input
-                                type="text"
-                                value={fullname}
-                                onChange={e => setFullname(e.target.value)}
-                                className="w-full px-4 py-2 border rounded-lg"
-                            />
-                        </div>
-
-                        {/* Phone Number Section */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Phone Number
-                            </label>
-                            <input
-                                type="text"
-                                value={phoneNumber}
-                                onChange={e => setPhonenumber(e.target.value)}
-                                className="w-full px-4 py-2 border rounded-lg"
-                            />
-                        </div>
-
-                        {/* Save Button */}
-                        <button className="bg-blue-500 text-white px-4 py-2 rounded-md"
-                            onClick={editInformation}>
-                            Save
-                        </button>
-                    </div>
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="mt-4 text-gray-600">Loading your profile...</p>
                 </div>
+            </div>
+        );
+    }
 
-                {/* Right Side Card */}
-                <div className="w-1/3 bg-white shadow-md rounded-lg p-5">
-                    <div className="flex items-center mb-4">
-                        <img
-                            src={account?.avatar || '/path/to/default-avatar.png'} // Default avatar if account.avatar is null
-                            alt="User Avatar"
-                            className="w-12 h-12 rounded-full mr-4"
-                        />
-                        <h2 className="text-lg font-semibold">Chào {candidate ? candidate.fullname : 'User'}, đã trở lại!</h2>
+    return (
+        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Left Side - Profile Card */}
+                    <div className="lg:w-1/3">
+                        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-center">
+                                <div className="relative mx-auto w-32 h-32 rounded-full border-4 border-white shadow-lg overflow-hidden">
+                                    <img
+                                        src={account?.avatar || '/default-avatar.png'}
+                                        alt="User Avatar"
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <label className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleAvatarChange}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </div>
+                                <h2 className="mt-4 text-2xl font-bold text-white">{candidate?.fullname || 'User'}</h2>
+                                <p className="text-blue-100">{email}</p>
+                            </div>
+
+                            <div className="p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-lg font-semibold text-gray-800">Account Settings</h3>
+                                    <button 
+                                        onClick={saveAvatar}
+                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            disabled
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                        <input
+                                            type="text"
+                                            value={fullname}
+                                            onChange={e => setFullname(e.target.value)}
+                                            className="text-black w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                                        <input
+                                            type="text"
+                                            value={phoneNumber}
+                                            onChange={e => setPhonenumber(e.target.value)}
+                                            className="text-black w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={editInformation}
+                                        className="w-full mt-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                                    >
+                                        Update Information
+                                    </button>
+
+                                    <Link href="/profile/changepassword">
+                                        <button className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                            </svg>
+                                            Change Password
+                                        </button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* CV Selection */}
-                    {cvList.length > 0 ? (
-                        <div className="mb-4">
-                            <h3 className="text-lg font-semibold mb-2">Select Main CV</h3>
-                            <select
-                                value={selectedCvId || ''}
-                                onChange={handleCvSelect}
-                                className="w-full px-4 py-2 border rounded-lg"
-                                disabled={searchStatus}
-                            >
-                                <option value="" disabled>Select your CV</option>
-                                {cvList.map(cv => (
-                                    <option key={cv.id} value={cv.id}>
-                                        {cv.name || cv.title} {cv.mainCV ? '(Main CV)' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    ) : (
-                        <div className="mt-4">
-                            <p className="text-gray-600">You don't have any CVs yet.</p>
-                            <Link href="/cv">
-                                <button className="bg-blue-500 text-white px-4 py-2 rounded-md">
-                                    Upload CV
-                                </button>
-                            </Link>
-                        </div>
-                    )}
+                    {/* Right Side - Main Content */}
+                    <div className="lg:w-2/3">
+                        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                            {/* Tabs */}
+                            <div className="border-b border-gray-200">
+                                <nav className="flex -mb-px">
+                                    <button
+                                        onClick={() => setActiveTab('profile')}
+                                        className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${activeTab === 'profile' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                    >
+                                        Profile Information
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('cv')}
+                                        className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${activeTab === 'cv' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                    >
+                                        CV Management
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('settings')}
+                                        className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                                    >
+                                        Account Settings
+                                    </button>
+                                </nav>
+                            </div>
 
-                    <div className="flex items-center mt-4">
-                        {/* Toggle Switch */}
-                        <div
-                            onClick={toggleSearchStatus}
-                            className={`w-12 h-6 flex items-center bg-${searchStatus ? 'green-500' : 'gray-300'} rounded-full p-1 cursor-pointer transition-colors duration-300`}
-                        >
-                            {/* Circle inside the switch */}
-                            <div
-                                className={`bg-white w-5 h-5 rounded-full shadow-md transform ${searchStatus ? 'translate-x-6' : 'translate-x-0'} transition-transform duration-300`}
-                            ></div>
-                        </div>
+                            {/* Tab Content */}
+                            <div className="p-6">
+                                {activeTab === 'profile' && (
+                                    <div>
+                                        <h3 className="text-xl font-semibold text-gray-800 mb-6">Profile Overview</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="bg-blue-50 p-4 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <div className="p-3 bg-blue-100 rounded-full mr-4">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-medium text-gray-500">Full Name</h4>
+                                                        <p className="text-lg font-semibold text-gray-800">{fullname || 'Not set'}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                        {/* Status Text */}
-                        <span className={`ml-3 font-medium ${searchStatus ? 'text-green-500' : 'text-gray-500'}`}>
-                            Trạng thái tìm việc đang {searchStatus ? 'bật' : 'tắt'}
-                        </span>
+                                            <div className="bg-green-50 p-4 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <div className="p-3 bg-green-100 rounded-full mr-4">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-medium text-gray-500">Phone Number</h4>
+                                                        <p className="text-lg font-semibold text-gray-800">{phoneNumber || 'Not set'}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-purple-50 p-4 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <div className="p-3 bg-purple-100 rounded-full mr-4">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-medium text-gray-500">Email</h4>
+                                                        <p className="text-lg font-semibold text-gray-800">{email}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className={`p-4 rounded-lg ${searchStatus ? 'bg-teal-50' : 'bg-amber-50'}`}>
+                                                <div className="flex items-center">
+                                                    <div className={`p-3 rounded-full mr-4 ${searchStatus ? 'bg-teal-100' : 'bg-amber-100'}`}>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 ${searchStatus ? 'text-teal-600' : 'text-amber-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-medium text-gray-500">Job Search Status</h4>
+                                                        <div className="flex items-center">
+                                                            <p className="text-lg font-semibold text-gray-800 mr-3">
+                                                                {searchStatus ? 'Active' : 'Inactive'}
+                                                            </p>
+                                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    className="sr-only peer" 
+                                                                    checked={searchStatus}
+                                                                    onChange={toggleSearchStatus}
+                                                                />
+                                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'cv' && (
+                                    <div>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="text-xl font-semibold text-gray-800">CV Management</h3>
+                                            <Link href="/cv">
+                                                <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                    </svg>
+                                                    Upload New CV
+                                                </button>
+                                            </Link>
+                                        </div>
+
+                                        {cvList.length > 0 ? (
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Main CV Selection</label>
+                                                    <select
+                                                        value={selectedCvId || ''}
+                                                        onChange={handleCvSelect}
+                                                        className="text-black w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                        disabled={searchStatus}
+                                                    >
+                                                        <option value="" disabled>Select your main CV</option>
+                                                        {cvList.map(cv => (
+                                                            <option key={cv.id} value={cv.id}>
+                                                                {cv.name || cv.title} {cv.mainCV ? '(Current Main CV)' : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    {searchStatus && (
+                                                        <p className="mt-2 text-sm text-amber-600">
+                                                            You need to disable job search status before changing your main CV.
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="mt-6">
+                                                    <h4 className="text-lg font-medium text-gray-800 mb-3">Your CVs</h4>
+                                                    <div className="space-y-3">
+                                                        {cvList.map(cv => (
+                                                            <div key={cv.id} className={`p-4 border rounded-lg ${cv.mainCV ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}>
+                                                                <div className="flex justify-between items-center">
+                                                                    <div>
+                                                                        <h5 className="font-medium text-gray-800">{cv.name || cv.title}</h5>
+                                                                        <p className="text-sm text-gray-500">Uploaded: {new Date(cv.updatedDate).toLocaleDateString()}</p>
+                                                                    </div>
+                                                                    <div className="flex space-x-2">
+                                                                        {cv.mainCV && (
+                                                                            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                                                                                Main CV
+                                                                            </span>
+                                                                        )}
+                                                                        <Link href={`/cv/edit/${cv.id}`}>
+                                                                            <button className="p-1 text-gray-500 hover:text-blue-500">
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        </Link>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-12">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <h4 className="mt-4 text-lg font-medium text-gray-800">No CVs Uploaded Yet</h4>
+                                                <p className="mt-2 text-gray-600 mb-6">Upload your first CV to get started with job applications</p>
+                                                <Link href="/cv">
+                                                    <button className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                                        Upload CV
+                                                    </button>
+                                                </Link>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {activeTab === 'settings' && (
+                                    <div>
+                                        <h3 className="text-xl font-semibold text-gray-800 mb-6">Account Settings</h3>
+                                        
+                                        <div className="space-y-6">
+                                            <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                                                <h4 className="text-lg font-medium text-gray-800 mb-4">Job Search Preferences</h4>
+                                                
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium text-gray-800">Job Search Status</p>
+                                                        <p className="text-sm text-gray-500">
+                                                            {searchStatus 
+                                                                ? "Your profile is visible to employers" 
+                                                                : "Your profile is not visible to employers"}
+                                                        </p>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="sr-only peer" 
+                                                            checked={searchStatus}
+                                                            onChange={toggleSearchStatus}
+                                                        />
+                                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                                                <h4 className="text-lg font-medium text-gray-800 mb-4">Security</h4>
+                                                
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="font-medium text-gray-800">Password</p>
+                                                            <p className="text-sm text-gray-500">Last changed 3 months ago</p>
+                                                        </div>
+                                                        <Link href="/profile/changepassword">
+                                                            <button className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors">
+                                                                Change Password
+                                                            </button>
+                                                        </Link>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                                        <div>
+                                                            <p className="font-medium text-gray-800">Two-Factor Authentication</p>
+                                                            <p className="text-sm text-gray-500">Add an extra layer of security</p>
+                                                        </div>
+                                                        <button className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors">
+                                                            Enable 2FA
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white border border-red-200 rounded-lg p-6 shadow-sm">
+                                                <h4 className="text-lg font-medium text-gray-800 mb-4">Danger Zone</h4>
+                                                
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="font-medium text-gray-800">Delete Account</p>
+                                                            <p className="text-sm text-gray-500">Permanently delete your account and all data</p>
+                                                        </div>
+                                                        <button className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">
+                                                            Delete Account
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

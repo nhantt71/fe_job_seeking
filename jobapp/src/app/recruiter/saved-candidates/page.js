@@ -17,7 +17,7 @@ export default function Home() {
                 <link rel="icon" href="/favicon.ico" />
             </Head>
 
-            <main className="bg-gray-100 min-h-screen pt-20">
+            <main suppressHydrationWarning className="bg-gray-100 min-h-screen pt-20">
                 <SavedCandidates/>
             </main>
             <Footer />

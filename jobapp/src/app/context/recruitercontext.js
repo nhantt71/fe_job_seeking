@@ -10,13 +10,20 @@ export const useRecruiterContext = () => {
 
 export const RecruiterProvider = ({ children }) => {
     const [recruiter, setRecruiter] = useState(null);
+    const [company, setCompany] = useState(null);
+    const [companyId, setCompanyId] = useState(0);
 
     const setRecruiterData = (recruiterData) => {
         setRecruiter(recruiterData);
     };
 
+    const setCompanyData = (companyData) => {
+        setCompany(companyData);
+    };
+
+
     return (
-        <RecruiterContext.Provider value={{ recruiter, setRecruiterData }}>
+        <RecruiterContext.Provider value={{ recruiter, company, setRecruiterData, setCompanyData, companyId, setCompanyId }}>
             {children}
         </RecruiterContext.Provider>
     );
