@@ -241,7 +241,7 @@ export function Register() {
                         <div className="mt-6 text-center text-sm">
                             <p className="text-gray-600">
                                 Already have an account?{' '}
-                                <a href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                                <a href="/recruiter/login" className="font-medium text-blue-600 hover:text-blue-500">
                                     Sign in
                                 </a>
                             </p>

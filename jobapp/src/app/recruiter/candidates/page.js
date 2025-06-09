@@ -8,7 +8,7 @@ import ClientOnly from "@/components/ClientOnly";
 
 export default function Home() {
     return (
-        <>
+        <div suppressHydrationWarning={true}>
             <RecruiterCustomTopBar />
             <Head>
                 <title>Recruiter Dashboard</title>
@@ -21,6 +21,6 @@ export default function Home() {
             </ClientOnly>
 
             <Footer />
-        </>
+        </div>
     );
 }

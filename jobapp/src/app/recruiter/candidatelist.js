@@ -155,10 +155,11 @@ const CVPreview = ({ fileUrl, onClick }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl"
+            suppressHydrationWarning={true}
         >
-            <div className="animate-pulse flex flex-col items-center">
-                <div className="h-8 w-8 bg-gray-200 rounded-full mb-2"></div>
-                <p className="text-gray-500 text-sm">Loading preview...</p>
+            <div className="animate-pulse flex flex-col items-center" suppressHydrationWarning={true}>
+                <div className="h-8 w-8 bg-gray-200 rounded-full mb-2" suppressHydrationWarning={true}></div>
+                <p className="text-gray-500 text-sm" suppressHydrationWarning={true}>Loading preview...</p>
             </div>
         </motion.div>
     );
@@ -799,11 +800,12 @@ const CandidatesList = () => {
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 {isLoading ? (
-                    <div className="flex justify-center items-center py-20">
+                    <div className="flex justify-center items-center py-20" suppressHydrationWarning={true}>
                         <motion.div
                             animate={{ rotate: 360 }}
                             transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                             className="h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full"
+                            suppressHydrationWarning={true}
                         ></motion.div>
                     </div>
                 ) : displayCandidates.length === 0 ? (

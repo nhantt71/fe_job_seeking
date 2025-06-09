@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRecruiterContext } from '../../context/recruitercontext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DocumentIcon, SparklesIcon, UserIcon, PhoneIcon, EnvelopeIcon, BriefcaseIcon, ChartBarIcon, AdjustmentsHorizontalIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { DocumentIcon, SparklesIcon, UserIcon, PhoneIcon, EnvelopeIcon, BriefcaseIcon, ChartBarIcon, AdjustmentsHorizontalIcon, XMarkIcon, MagnifyingGlassIcon, ChatBubbleLeftRightIcon, BookmarkIcon, BookmarkSlashIcon } from '@heroicons/react/24/outline';
+import { db } from '../../firebase';
+import { collection, addDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 
 // SafeDiv component to handle hydration warnings
 const SafeDiv = ({ children, className, ...props }) => {
@@ -484,6 +486,18 @@ const CandidateRecommendation = () => {
         }
     };
 
+    const fetchSavedStatus = async (candidateId) => {
+        try {
+            const response = await fetch(
+                `/api/company-candidate/check-saved-status?candidateId=${candidateId}&companyId=${companyId}`
+            );
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching saved status:', error);
+            return false;
+        }
+    };
+
     const handleJobSelect = async (jobId) => {
         setSelectedJobId(jobId);
         setIsLoadingCandidates(true);
@@ -516,13 +530,15 @@ const CandidateRecommendation = () => {
                             
                             const cvData = await cvRes.json();
                             const candidateInfo = await fetchCandidateInfo(cvData.candidateId);
+                            const isSaved = await fetchSavedStatus(cvData.candidateId);
                             
                             return {
                                 ...candidateInfo,
                                 id: cvData.candidateId,
                                 fileCV: cvData.fileCV,
                                 match_score: recommendation.score,
-                                match_reason: recommendation.explanation
+                                match_reason: recommendation.explanation,
+                                isSaved: isSaved
                             };
                         } catch (error) {
                             console.error(`Error fetching data for CV ID ${recommendation.cv_id}:`, error);
@@ -552,6 +568,84 @@ const CandidateRecommendation = () => {
 
     const closeModal = () => {
         setSelectedCvUrl(null);
+    };
+
+    const handleSaveToggle = async (candidateId, isCurrentlySaved) => {
+        const url = isCurrentlySaved
+            ? `/api/company-candidate/unsave-candidate/${candidateId}?companyId=${companyId}`
+            : `/api/company-candidate/save-candidate/${candidateId}?companyId=${companyId}`;
+
+        try {
+            await fetch(url, { method: 'POST' });
+            
+            // Update the UI to reflect the changed saved status
+            setRecommendedCandidates(prev => 
+                prev.map(candidate => 
+                    candidate.id === candidateId 
+                        ? { ...candidate, isSaved: !isCurrentlySaved } 
+                        : candidate
+                )
+            );
+        } catch (error) {
+            console.error('Error toggling save status:', error);
+        }
+    };
+
+    const handleConnect = async (candidateId, candidateEmail) => {
+        if (!recruiter || !recruiter.email) {
+            alert('Please log in to connect with candidates');
+            return;
+        }
+
+        try {
+            const chatRoomId = getChatRoomId(recruiter.email, candidateEmail);
+
+            const chatRoomsRef = collection(db, "chatRooms");
+            const q = query(chatRoomsRef, where("roomId", "==", chatRoomId));
+            const querySnapshot = await getDocs(q);
+
+            let roomId = chatRoomId;
+            let roomDocId = null;
+
+            if (querySnapshot.empty) {
+                const docRef = await addDoc(chatRoomsRef, {
+                    roomId: chatRoomId,
+                    participants: [recruiter.email, candidateEmail],
+                    createdAt: serverTimestamp()
+                });
+                roomDocId = docRef.id;
+            } else {
+                roomDocId = querySnapshot.docs[0].id;
+            }
+
+            localStorage.setItem('activeChatRoom', JSON.stringify({
+                roomId: chatRoomId,
+                id: roomDocId,
+                participants: [recruiter.email, candidateEmail]
+            }));
+
+            const chatEvent = new CustomEvent('openChatWithCandidate', {
+                detail: {
+                    roomId: chatRoomId,
+                    id: roomDocId,
+                    participants: [recruiter.email, candidateEmail]
+                }
+            });
+            window.dispatchEvent(chatEvent);
+
+            const chatButton = document.querySelector('.fixed.bottom-4.right-4 button');
+            if (chatButton) {
+                chatButton.click();
+            }
+        } catch (error) {
+            console.error("Error connecting with candidate:", error);
+            alert("Failed to connect with candidate. Please try again.");
+        }
+    };
+
+    const getChatRoomId = (recruiterId, candidateId) => {
+        const ids = [recruiterId, candidateId].sort();
+        return `${ids[0]}_${ids[1]}`;
     };
 
     const handleFilterSearch = async (filters) => {
@@ -595,13 +689,15 @@ const CandidateRecommendation = () => {
                         
                         const cvData = await cvRes.json();
                         const candidateInfo = await fetchCandidateInfo(cvData.candidateId);
+                        const isSaved = await fetchSavedStatus(cvData.candidateId);
                         
                         return {
                             ...candidateInfo,
                             id: cvData.candidateId,
                             fileCV: cvData.fileCV,
                             match_score: match.match_score,
-                            match_reason: match.reason
+                            match_reason: match.reason,
+                            isSaved: isSaved
                         };
                     } catch (error) {
                         console.error(`Error fetching data for CV ID ${match.cv_id}:`, error);
@@ -829,6 +925,38 @@ const CandidateRecommendation = () => {
                                                             <span>{candidate.phoneNumber || 'No phone available'}</span>
                                                         </SafeDiv>
                                                     </SafeDiv>
+
+                                                    {/* Action buttons moved here */}
+                                                    <SafeDiv className="mt-4 flex gap-2">
+                                                        <button 
+                                                            onClick={() => handleConnect(candidate.id, candidate.email)}
+                                                            className="px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center"
+                                                        >
+                                                            <ChatBubbleLeftRightIcon className="h-4 w-4 mr-1" />
+                                                            Connect
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleSaveToggle(candidate.id, candidate.isSaved)}
+                                                            className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center ${
+                                                                candidate.isSaved
+                                                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                            }`}
+                                                        >
+                                                            {candidate.isSaved ? (
+                                                                <>
+                                                                    <BookmarkSlashIcon className="h-4 w-4 mr-1" />
+                                                                    Unsave
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <BookmarkIcon className="h-4 w-4 mr-1" />
+                                                                    Save
+                                                                </>
+                                                            )}
+                                                        </button>
+                                     
+                                                    </SafeDiv>
                                                     
                                                     {/* Match score */}
                                                     <SafeDiv className="mt-4">
@@ -858,8 +986,8 @@ const CandidateRecommendation = () => {
                                                 </SafeDiv>
                                             </SafeDiv>
                                             
-                                            {/* CV Preview and Actions */}
-                                            <SafeDiv className="flex flex-col items-end gap-4 w-full md:w-48 flex-shrink-0">
+                                            {/* CV Preview only */}
+                                            <SafeDiv className="flex flex-col items-end w-full md:w-48 flex-shrink-0">
                                                 {candidate.fileCV && (
                                                     <SafeDiv className="w-full h-40">
                                                         <CVPreview 
@@ -868,17 +996,6 @@ const CandidateRecommendation = () => {
                                                         />
                                                     </SafeDiv>
                                                 )}
-                                                <SafeDiv className="flex gap-2 w-full">
-                                                    <button 
-                                                        onClick={() => candidate.fileCV && handleViewCV(candidate.fileCV)}
-                                                        className="flex-1 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                                                    >
-                                                        View CV
-                                                    </button>
-                                                    <button className="px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
-                                                        Contact
-                                                    </button>
-                                                </SafeDiv>
                                             </SafeDiv>
                                         </SafeDiv>
                                     </SafeMotion>

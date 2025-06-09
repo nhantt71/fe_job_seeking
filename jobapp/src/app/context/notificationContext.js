@@ -109,6 +109,36 @@ export function NotificationProvider({ children }) {
     
     // Add a small delay to ensure Firebase is fully initialized
     const timeoutId = setTimeout(() => {
+      // Try to extract user email directly from token or localStorage for more reliable fetching
+      let userEmail = null;
+      
+      // Check localStorage first
+      userEmail = localStorage.getItem('email');
+      
+      // If not found, try to extract from JWT token
+      if (!userEmail && token && token.split('.').length === 3) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          
+          const payload = JSON.parse(jsonPayload);
+          userEmail = payload.sub || payload.email || payload.username;
+          
+          if (userEmail) {
+            console.log('NotificationContext - Extracted email from token:', userEmail);
+            // Store it for future use
+            if (typeof localStorage !== 'undefined' && !localStorage.getItem('email')) {
+              localStorage.setItem('email', userEmail);
+            }
+          }
+        } catch (e) {
+          console.error('NotificationContext - Error extracting email from token:', e);
+        }
+      }
+      
       const unsubscribe = getNotifications((notificationData) => {
         console.log('NotificationContext - Received notifications:', notificationData);
         

@@ -6,11 +6,14 @@ import { useNotifications } from '../../context/notificationContext';
 import { debugToken } from '../../utils/tokenDebugger';
 import RecruiterCustomTopBar from '../../common/recruitercustomtopbar';
 import Link from 'next/link';
+import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 export default function NotificationDebugPage() {
   const [debugInfo, setDebugInfo] = useState({});
   const [localNotifications, setLocalNotifications] = useState([]);
   const { notifications, unreadCount, isAuthenticated, isInitialized } = useNotifications();
+  const [userId, setUserId] = useState(null);
   
   useEffect(() => {
     const fetchDebugInfo = async () => {
@@ -27,6 +30,25 @@ export default function NotificationDebugPage() {
           localStorageItems[key] = 'Error reading value';
         }
       }
+
+      // Extract user ID
+      let extractedUserId = null;
+      if (tokenInfo) {
+        extractedUserId = 
+          tokenInfo.sub || 
+          tokenInfo.email || 
+          tokenInfo.username || 
+          tokenInfo.user_id || 
+          tokenInfo.id || 
+          tokenInfo.uid ||
+          tokenInfo.preferred_username;
+      }
+      
+      if (!extractedUserId) {
+        extractedUserId = localStorage.getItem('email') || localStorage.getItem('username');
+      }
+      
+      setUserId(extractedUserId);
       
       setDebugInfo({
         tokenInfo,
@@ -34,7 +56,8 @@ export default function NotificationDebugPage() {
         isAuthenticated,
         isInitialized,
         unreadCount,
-        notificationsCount: notifications.length
+        notificationsCount: notifications.length,
+        extractedUserId
       });
     };
     
@@ -71,6 +94,74 @@ export default function NotificationDebugPage() {
       alert('Error creating custom notification: ' + error.message);
     }
   };
+
+  // New function specifically for fixing recruiter notifications
+  const fixRecruiterNotifications = async () => {
+    try {
+      // First check the token
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('No token found. Please log in first.');
+        return;
+      }
+
+      // Extract user email from token or localStorage
+      let userEmail = null;
+      
+      // Try to get from token if it's a JWT
+      if (token.split('.').length === 3) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          
+          const payload = JSON.parse(jsonPayload);
+          userEmail = payload.sub || payload.email || payload.username;
+        } catch (e) {
+          console.error('Error decoding token:', e);
+        }
+      }
+      
+      // If not found in token, try localStorage
+      if (!userEmail) {
+        userEmail = localStorage.getItem('email');
+      }
+      
+      if (!userEmail) {
+        alert('Could not determine user email. Please try logging out and back in.');
+        return;
+      }
+      
+      // Create notification directly in Firestore for the current user
+      const notificationData = {
+        title: 'Recruiter Notification Test',
+        body: 'This is a test notification for the recruiter at ' + new Date().toLocaleTimeString(),
+        userId: userEmail,
+        read: false,
+        timestamp: serverTimestamp(),
+        type: 'success'
+      };
+      
+      const docRef = await addDoc(collection(db, "notifications"), notificationData);
+      
+      alert(`Direct notification created with ID: ${docRef.id} for user ${userEmail}`);
+      
+      // Check if it appears in the local list
+      setTimeout(() => {
+        // Refresh the list
+        getNotifications(notifs => {
+          setLocalNotifications(notifs);
+          alert(`Notifications refreshed. Count: ${notifs.length}`);
+        });
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error fixing recruiter notifications:', error);
+      alert('Error: ' + error.message);
+    }
+  };
   
   return (
     <div className="min-h-screen bg-gray-100">
@@ -81,7 +172,7 @@ export default function NotificationDebugPage() {
         
         <div className="bg-white rounded-lg shadow-md p-4 mb-4">
           <h2 className="text-xl font-semibold mb-2">Actions</h2>
-          <div className="flex space-x-4">
+          <div className="flex flex-wrap gap-4">
             <button 
               onClick={createTestNotification}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -93,6 +184,12 @@ export default function NotificationDebugPage() {
               className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             >
               Create Custom Notification
+            </button>
+            <button 
+              onClick={fixRecruiterNotifications}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            >
+              Fix Recruiter Notifications
             </button>
           </div>
         </div>

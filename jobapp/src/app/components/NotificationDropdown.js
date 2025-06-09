@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { Menu, Transition } from '@headlessui/react';
-import { BellIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { BellIcon, CheckCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useNotifications } from '../context/notificationContext';
 import { getNotifications } from '../firebase';
 
@@ -13,6 +13,8 @@ export default function NotificationDropdown() {
   // Add direct state for token
   const [hasDirectToken, setHasDirectToken] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [localNotifications, setLocalNotifications] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const { 
     notifications = [], 
@@ -20,7 +22,8 @@ export default function NotificationDropdown() {
     markAsRead = () => {}, 
     markAllAsRead = () => {},
     isAuthenticated = false,
-    isInitialized = false
+    isInitialized = false,
+    refreshNotifications = () => {}
   } = notificationsContext || {};
   
   // Check token directly
@@ -29,6 +32,11 @@ export default function NotificationDropdown() {
       const token = localStorage.getItem('token');
       console.log('NotificationDropdown - Direct token check:', !!token);
       setHasDirectToken(!!token);
+      
+      // If token exists but no notifications loaded, try direct loading
+      if (token && (!notifications || notifications.length === 0)) {
+        getDirectNotifications();
+      }
     };
     
     checkToken();
@@ -37,7 +45,35 @@ export default function NotificationDropdown() {
     const interval = setInterval(checkToken, 5000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [notifications]);
+
+  // Get notifications directly from Firestore as backup
+  const getDirectNotifications = () => {
+    getNotifications((notifs) => {
+      console.log('Direct notifications fetch:', notifs);
+      if (notifs && notifs.length > 0) {
+        setLocalNotifications(notifs);
+      }
+    });
+  };
+  
+  // Manual refresh handler
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    
+    // Try context refresh if available
+    if (typeof refreshNotifications === 'function') {
+      refreshNotifications();
+    }
+    
+    // Also try direct refresh
+    getDirectNotifications();
+    
+    // Reset refreshing state after a delay
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 2000);
+  };
   
   // Add debug logging
   useEffect(() => {
@@ -91,6 +127,7 @@ export default function NotificationDropdown() {
     if (token) {
       getNotifications((notificationData) => {
         console.log('Forced refresh - Received notifications:', notificationData);
+        setLocalNotifications(notificationData || []);
       });
     }
   };
@@ -100,19 +137,36 @@ export default function NotificationDropdown() {
   
   // Use either context auth or direct token check
   const isUserAuthenticated = isAuthenticated || hasDirectToken || hasToken;
+  
+  // Use either context notifications or direct notifications if context is empty
+  const displayNotifications = notifications && notifications.length > 0 
+    ? notifications 
+    : localNotifications;
+  
+  // Calculate unread count from direct notifications if needed
+  const displayUnreadCount = unreadCount > 0 
+    ? unreadCount 
+    : localNotifications.filter(n => !n.read).length;
 
   return (
     <Menu as="div" className="relative">
       <div className="flex items-center">
         <Menu.Button className="relative flex items-center justify-center rounded-full p-1 text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-200">
           <BellIcon className="h-6 w-6" />
-          {isUserAuthenticated && unreadCount > 0 && (
+          {isUserAuthenticated && displayUnreadCount > 0 && (
             <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {displayUnreadCount > 9 ? '9+' : displayUnreadCount}
             </span>
           )}
         </Menu.Button>
         
+        {/* <button 
+          onClick={handleRefresh}
+          className="ml-2 p-1 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-gray-100 focus:outline-none"
+          title="Refresh notifications"
+        >
+          <ArrowPathIcon className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button> */}
       </div>
       
       {/* Debug panel */}
@@ -125,7 +179,8 @@ export default function NotificationDropdown() {
             <p>Token Check: {hasToken ? 'Yes' : 'No'}</p>
             <p>Initialized: {isInitialized ? 'Yes' : 'No'}</p>
             <p>Notifications: {notifications?.length || 0}</p>
-            <p>Unread: {unreadCount}</p>
+            <p>Direct Notifications: {localNotifications?.length || 0}</p>
+            <p>Unread: {displayUnreadCount}</p>
             <button 
               onClick={forceRefreshNotifications}
               className="mt-2 px-2 py-1 bg-blue-500 text-white rounded text-xs"
@@ -149,7 +204,7 @@ export default function NotificationDropdown() {
           <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
-              {isUserAuthenticated && unreadCount > 0 && (
+              {isUserAuthenticated && displayUnreadCount > 0 && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -168,16 +223,16 @@ export default function NotificationDropdown() {
               <div className="px-4 py-6 text-center text-sm text-gray-500">
                 Please log in to see notifications
               </div>
-            ) : !isInitialized ? (
+            ) : !isInitialized && localNotifications.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-gray-500">
                 Loading notifications...
               </div>
-            ) : notifications.length === 0 ? (
+            ) : displayNotifications.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-gray-500">
                 No notifications yet
               </div>
             ) : (
-              notifications.map((notification) => (
+              displayNotifications.map((notification) => (
                 <Menu.Item key={notification.id}>
                   {({ active }) => (
                     <div
