@@ -168,6 +168,13 @@ export default function CandidateAvailabilityChecker() {
             try {
                 const token = localStorage.getItem('token');
                 
+                // At the beginning of runCVAnalysis
+                if (localStorage.getItem('cvAnalysisInProgress') === 'true') {
+                    console.log('CV analysis already in progress, skipping');
+                    return;
+                }
+                localStorage.setItem('cvAnalysisInProgress', 'true');
+
                 // Get CV file URL
                 const cvFileRes = await fetch(`/api/cv/get-fileCV-by-CV-id/${cvId}`, {
                     headers: {
@@ -223,8 +230,15 @@ export default function CandidateAvailabilityChecker() {
                 // Update last analysis time
                 localStorage.setItem('lastCvAnalysisTime', new Date().getTime().toString());
                 
+                console.log('Starting analysis for candidate:', candidateData.id, candidateData.fullname);
+                // After analysis
+                console.log('Completed analysis for candidate:', candidateData.id);
+                
             } catch (error) {
                 console.error('Error analyzing CV:', error);
+            } finally {
+                // At the end in finally block
+                localStorage.removeItem('cvAnalysisInProgress');
             }
         };
 
