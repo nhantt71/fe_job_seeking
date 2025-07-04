@@ -6,12 +6,17 @@ import { useUserContext } from '../context/usercontext';
 import { useRouter } from 'next/navigation';
 import { getFirestore, doc, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import {app} from '@/app/firebase';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-export default function YourProfile() {
+const stripePromise = loadStripe('pk_test_51RZCRJIHR8guEBZDUVxaPD4ScbDdSnttLgTOs7VxiWWlbgwG6nPMEQqMYKIgrRoe1nAZWK0JpZ9KmSvVaTfWE86n00j3CtyJUi');
+
+export default function YourProfileWrapper(props) {
     const { email, account, setUserData, mainCVIdForJobs, setMainCVIdForJobs } = useUserContext();
     const [searchStatus, setSearchStatus] = useState(false);
     const [avatar, setAvatar] = useState(null);
     const [fullname, setFullname] = useState('');
+    const [trialTime, setTrialTime] = useState(0);
     const [phoneNumber, setPhonenumber] = useState('');
     const [candidate, setCandidate] = useState(null);
     const [cvList, setCvList] = useState([]);
@@ -49,7 +54,13 @@ export default function YourProfile() {
                 setUserData(data.username, data);
                 setIsAuthenticated(true);
                 if (data.username) {
-                    fetchCandidateData(data.username);
+                    fetchCandidateData(data.username).then(() => {
+                        checkAndUpdatePremiumStatus();
+                    });
+                }
+                // Set avatar from account data
+                if (data.avatar) {
+                    setAvatar(data.avatar);
                 }
             })
             .catch(error => {
@@ -58,6 +69,23 @@ export default function YourProfile() {
                 setIsAuthenticated(false);
             })
             .finally(() => setIsLoading(false));
+
+        // Check premium status every hour
+        const premiumCheckInterval = setInterval(checkAndUpdatePremiumStatus, 3600000);
+
+        return () => {
+            clearInterval(premiumCheckInterval);
+        };
+    }, []);
+
+    useEffect(() => {
+        // Check for Stripe session completion
+        const query = new URLSearchParams(window.location.search);
+        const sessionId = query.get('session_id');
+        
+        if (sessionId) {
+            handlePaymentConfirmation(sessionId);
+        }
     }, []);
 
     const fetchCandidateData = async (email) => {
@@ -78,7 +106,9 @@ export default function YourProfile() {
                 setPhonenumber(data.phoneNumber || '');
                 setSearchStatus(data.available || false);
                 setAvatar(data.avatar || null);
+                setTrialTime(data.trialTimes || 0);
                 fetchCVList(data.id);
+                console.log(data);
             }
         } catch (error) {
             console.error('Error fetching candidate data:', error);
@@ -189,21 +219,23 @@ export default function YourProfile() {
         try {
             const notificationsRef = collection(db, 'notifications', email, 'items');
             
-            if (searchStatus && recommendationsCount !== null) {
-                // Combined notification for enabling job search and recommendations
+            if (searchStatus) {
+                // Notification for enabling job search with recommendations count
                 await addDoc(notificationsRef, {
                     email,
                     action: 'EnableWithRecommendations',
+                    message: `Job search status has been enabled successfully! We found ${recommendationsCount || 0} job recommendations for you.`,
                     cvId: selectedCvId,
-                    numb_recommendation: recommendationsCount,
+                    numb_recommendation: recommendationsCount || 0,
                     read: false,
                     timestamp: serverTimestamp()
                 });
             } else {
-                // Standard status change notification
+                // Notification for disabling job search
                 await addDoc(notificationsRef, {
                     email,
-                    action: searchStatus ? 'Enable' : 'Disable',
+                    action: 'Disable',
+                    message: 'Job search status has been disabled successfully!',
                     cvId: selectedCvId,
                     read: false,
                     timestamp: serverTimestamp()
@@ -220,14 +252,31 @@ export default function YourProfile() {
             return;
         }
 
+        // Check if trial time is available for non-premium users
+        if (!searchStatus && !candidate?.isPremium && trialTime <= 0) {
+            alert("You don't have any trial time left. Please purchase a subscription to continue using job search features.");
+            return;
+        }
+
+        // Check if trial end date has passed for non-premium users
+        if (!candidate?.isPremium && candidate?.trialEndDate) {
+            const trialEndDate = new Date(candidate.trialEndDate);
+            if (trialEndDate < new Date()) {
+                alert("Your trial period has ended. Please purchase a subscription to continue using job search features.");
+                return;
+            }
+        }
+
         const confirmMessage = searchStatus 
             ? "Are you sure you want to turn off job search status? This will make your profile less visible to employers."
             : "Are you sure you want to turn on job search status? This will make your profile visible to employers.";
 
         if (window.confirm(confirmMessage)) {
-            const enableUrl = `/api/candidate/enable-finding-jobs/${candidate.id}`;
-            const disableUrl = `/api/candidate/disable-finding-jobs/${candidate.id}`;
-            const toggleUrl = searchStatus ? disableUrl : enableUrl;
+            const toggleUrl = searchStatus 
+                ? `/api/candidate/disable-finding-jobs/${candidate.id}`
+                : candidate?.isPremium 
+                    ? `/api/candidate/enable-finding-jobs-premium/${candidate.id}`
+                    : `/api/candidate/enable-finding-jobs/${candidate.id}`;
 
             fetch(toggleUrl, { method: 'POST' })
                 .then(res => {
@@ -238,7 +287,16 @@ export default function YourProfile() {
                     }
                     return res.text();
                 })
-                .then(() => {
+                .then(data => {
+                    if (data) {
+                        setCandidate(prev => ({
+                            ...prev,
+                            ...data,
+                            trialTimes: data.trialTimes,
+                            trialEndDate: data.trialEndDate
+                        }));
+                        setTrialTime(data.trialTimes);
+                    }
                     const newStatus = !searchStatus;
                     setSearchStatus(newStatus);
                     // Update Firebase notification
@@ -469,11 +527,120 @@ export default function YourProfile() {
         }
     };
 
+    const handlePaymentConfirmation = async (sessionId) => {
+        try {
+            // Call your backend to verify the session and confirm payment
+            const confirmResponse = await fetch('/api/payment/confirm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: JSON.stringify({
+                    sessionId: sessionId,
+                    userId: candidate.id,
+                }),
+            });
+
+            if (confirmResponse.ok) {
+                // Refresh candidate data to get updated premium status
+                await fetchCandidateData(email);
+                alert('Premium upgrade successful! Your account has been upgraded.');
+                // Remove the session_id from the URL without refreshing the page
+                window.history.replaceState({}, '', window.location.pathname);
+            } else {
+                const errorData = await confirmResponse.json();
+                throw new Error(errorData.message || 'Failed to confirm payment on server');
+            }
+        } catch (error) {
+            console.error('Error confirming payment:', error);
+            alert('There was an issue confirming your payment. Please contact support.');
+        }
+    };
+
+    const handleUpgradeToPremium = async () => {
+        try {
+            const stripe = await stripePromise;
+            
+            // Create checkout session
+            const checkoutResponse = await fetch('/api/payment/create-checkout-session', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: JSON.stringify({ 
+                    userId: candidateId,
+                    amount: 2000, // $20 in cents
+                })
+            });
+
+            if (!checkoutResponse.ok) {
+                const errorData = await checkoutResponse.json();
+                throw new Error(errorData.message || 'Failed to create checkout session');
+            }
+
+            const { id: sessionId } = await checkoutResponse.json();
+            
+            // Redirect to Stripe Checkout
+            const { error } = await stripe.redirectToCheckout({ sessionId });
+            if (error) {
+                throw new Error(error.message);
+            }
+        } catch (error) {
+            console.error('Error starting payment process:', error);
+            alert('Failed to start payment process. Please try again.');
+        }
+    };
+
+    const checkAndUpdatePremiumStatus = async () => {
+        if (candidate?.isPremium && candidate?.premiumEndDate) {
+            const premiumEndDate = new Date(candidate.premiumEndDate);
+            const now = new Date();
+
+            if (premiumEndDate < now) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`/api/candidate/disable-premium-candidate/${candidate.id}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                    });
+
+                    if (response.ok) {
+                        // Refresh candidate data after disabling premium
+                        await fetchCandidateData(email);
+                        console.log('Premium status disabled due to expiration');
+                    }
+                } catch (error) {
+                    console.error('Error disabling premium status:', error);
+                }
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (candidate) {
+            checkAndUpdatePremiumStatus();
+        }
+    }, [candidate?.premiumEndDate]);
+
     if (!isAuthenticated) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-                    <div className="mb-6">
+            <div 
+                className="min-h-screen bg-gray-50 flex items-center justify-center p-4"
+                suppressHydrationWarning
+            >
+                <div 
+                    className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center"
+                    suppressHydrationWarning
+                >
+                    <div 
+                        className="mb-6"
+                        suppressHydrationWarning
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
                         </svg>
@@ -502,6 +669,51 @@ export default function YourProfile() {
     }
 
     return (
+        <Elements stripe={stripePromise}>
+            <YourProfile
+                candidate={candidate}
+                setCandidate={setCandidate}
+                searchStatus={searchStatus}
+                setSearchStatus={setSearchStatus}
+                trialTime={trialTime}
+                setTrialTime={setTrialTime}
+                phoneNumber={phoneNumber}
+                setPhoneNumber={setPhonenumber}
+                fullname={fullname}
+                setFullname={setFullname}
+                avatar={avatar}
+                setAvatar={setAvatar}
+                cvList={cvList}
+                setCvList={setCvList}
+                selectedCvId={selectedCvId}
+                setSelectedCvId={setSelectedCvId}
+                mainCVIdForJobs={mainCVIdForJobs}
+                setMainCVIdForJobs={setMainCVIdForJobs}
+                recommendationCvId={recommendationCvId}
+                setRecommendationCvId={setRecommendationCvId}
+                length={length}
+                setLength={setLength}
+                handleCvSelect={handleCvSelect}
+                handleAvatarChange={handleAvatarChange}
+                saveAvatar={saveAvatar}
+                editInformation={editInformation}
+                toggleSearchStatus={toggleSearchStatus}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                handleUpgradeToPremium={handleUpgradeToPremium}
+                account={account}
+                email={email}
+            />
+        </Elements>
+    );
+}
+
+function YourProfile({ candidate, setCandidate, searchStatus, setSearchStatus, trialTime, setTrialTime, phoneNumber, setPhoneNumber, fullname, setFullname, avatar, setAvatar, cvList, setCvList, selectedCvId, setSelectedCvId, mainCVIdForJobs, setMainCVIdForJobs, recommendationCvId, setRecommendationCvId, length, setLength, handleCvSelect, handleAvatarChange, saveAvatar, editInformation, toggleSearchStatus, activeTab, setActiveTab, handleUpgradeToPremium, account, email }) {
+    const stripe = useStripe();
+    const elements = useElements();
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col lg:flex-row gap-8">
@@ -511,7 +723,7 @@ export default function YourProfile() {
                             <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-center">
                                 <div className="relative mx-auto w-32 h-32 rounded-full border-4 border-white shadow-lg overflow-hidden">
                                     <img
-                                        src={account?.avatar || '/default-avatar.png'}
+                                        src={avatar || account?.avatar || '/default-avatar.png'}
                                         alt="User Avatar"
                                         className="w-full h-full object-cover"
                                     />
@@ -528,8 +740,8 @@ export default function YourProfile() {
                                         />
                                     </label>
                                 </div>
-                                <h2 className="mt-4 text-2xl font-bold text-white">{candidate?.fullname || 'User'}</h2>
-                                <p className="text-blue-100">{email}</p>
+                                <h2 className="mt-4 text-2xl font-bold text-white">{fullname || 'User'}</h2>
+                                <p className="text-blue-100">{phoneNumber}</p>
                             </div>
 
                             <div className="p-6">
@@ -548,7 +760,7 @@ export default function YourProfile() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                                         <input
                                             type="email"
-                                            value={email}
+                                            value={candidate?.email || account?.email || email || ''}
                                             disabled
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700"
                                         />
@@ -569,7 +781,7 @@ export default function YourProfile() {
                                         <input
                                             type="text"
                                             value={phoneNumber}
-                                            onChange={e => setPhonenumber(e.target.value)}
+                                            onChange={e => setPhoneNumber(e.target.value)}
                                             className="text-black w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
@@ -664,7 +876,7 @@ export default function YourProfile() {
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-medium text-gray-500">Email</h4>
-                                                        <p className="text-lg font-semibold text-gray-800">{email}</p>
+                                                        <p className="text-lg font-semibold text-gray-800">{candidate?.email || account?.email || email || 'Not set'}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -691,6 +903,105 @@ export default function YourProfile() {
                                                                 />
                                                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                                             </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-indigo-50 p-4 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <div className="p-3 bg-indigo-100 rounded-full mr-4">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            {candidate?.isPremium ? (
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                                            ) : (
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            )}
+                                                        </svg>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="text-sm font-medium text-gray-500">
+                                                            {candidate?.isPremium ? 'Premium Account Status' : 'Trial Information'}
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {candidate?.isPremium ? (
+                                                                <>
+                                                                    <div className="flex items-center">
+                                                                        <p className="text-lg font-semibold text-green-600 flex items-center">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                                                            </svg>
+                                                                            Premium Account Active
+                                                                        </p>
+                                                                    </div>
+                                                                    {candidate?.premiumEndDate && (
+                                                                        <p className="text-sm text-gray-600">
+                                                                            Premium expires: {new Date(candidate.premiumEndDate).toLocaleDateString()}
+                                                                        </p>
+                                                                    )}
+                                                                    <p className="text-sm text-indigo-600">
+                                                                        Enjoy unlimited access to all premium features
+                                                                    </p>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="flex items-center">
+                                                                        <p className="text-lg font-semibold text-gray-800">
+                                                                            Remaining Trials: {trialTime}
+                                                                        </p>
+                                                                        <div className="relative ml-2 group">
+                                                                            <svg
+                                                                                xmlns="http://www.w3.org/2000/svg"
+                                                                                className="h-5 w-5 text-gray-400 cursor-help"
+                                                                                fill="none"
+                                                                                viewBox="0 0 24 24"
+                                                                                stroke="currentColor"
+                                                                            >
+                                                                                <path
+                                                                                    strokeLinecap="round"
+                                                                                    strokeLinejoin="round"
+                                                                                    strokeWidth={2}
+                                                                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                                                />
+                                                                            </svg>
+                                                                            <div className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-white rounded-lg shadow-lg border border-gray-200 hidden group-hover:block z-50">
+                                                                                <div className="text-sm text-gray-600">
+                                                                                    <p className="mb-1">• Each trial period lasts for 3 days</p>
+                                                                                    <p className="mb-1">• Job search status will automatically turn off when the trial ends</p>
+                                                                                    <p className="mb-1">• You can use your remaining trials to reactivate job search</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    {candidate?.trialEndDate && (
+                                                                        <p className="text-sm text-gray-600">
+                                                                            Trial ends: {new Date(candidate.trialEndDate).toLocaleDateString()}
+                                                                        </p>
+                                                                    )}
+                                                                    <div className="mt-4 space-y-3">
+                                                                        <button
+                                                                            onClick={handleUpgradeToPremium}
+                                                                            className="w-full px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-semibold flex items-center justify-center"
+                                                                            disabled={isProcessing}
+                                                                        >
+                                                                            {isProcessing ? (
+                                                                                <span className="flex items-center">
+                                                                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                                    </svg>
+                                                                                    Processing...
+                                                                                </span>
+                                                                            ) : (
+                                                                                'Upgrade to Premium ($20/month)'
+                                                                            )}
+                                                                        </button>
+                                                                        <p className="text-xs text-indigo-600 text-center">
+                                                                            Get unlimited access to job search features
+                                                                        </p>
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>

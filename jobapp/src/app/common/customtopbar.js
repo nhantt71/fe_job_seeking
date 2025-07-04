@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useUserContext } from '../context/usercontext';
 import { useRouter } from 'next/navigation';
 import { db } from '@/app/firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogoutHandler from './logoutHandler';
+import { memo } from 'react';
 
 const CustomTopBar = () => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -28,8 +29,34 @@ const CustomTopBar = () => {
 
     const { email, account, role, setUserData } = useUserContext();
     const { handleLogout: logoutWithCleanup } = LogoutHandler();
-
     const router = useRouter();
+
+    // Navigation items - memoized to prevent recreating on each render
+    const navigationItems = useMemo(() => [
+        { href: "/job", label: "Jobs" },
+        { href: "/job-recommendation", label: "Recommendations" },
+        { href: "/company", label: "Companies" }
+    ], []);
+
+    // Profile dropdown items
+    const profileItems = useMemo(() => [
+        { href: "/profile", label: "Profile" },
+        { href: "/cv", label: "CV" }
+    ], []);
+
+    // Jobs dropdown items
+    const jobItems = useMemo(() => [
+        { href: "/job/saved", label: "Saved Jobs" },
+        { href: "/job/applied", label: "Applied Jobs" }
+    ], []);
+
+    useEffect(() => {
+        setIsMounted(true);
+        // Prefetch common routes
+        navigationItems.forEach(item => router.prefetch(item.href));
+        profileItems.forEach(item => router.prefetch(item.href));
+        jobItems.forEach(item => router.prefetch(item.href));
+    }, []);
 
     useEffect(() => {
         setIsMounted(true);
@@ -103,11 +130,13 @@ const CustomTopBar = () => {
         return () => clearInterval(interval);
     }, []);
 
+    // Optimize notification fetching
     useEffect(() => {
         if (isAuthenticated && email) {
             const q = query(
                 collection(db, 'notifications', email, 'items'),
-                orderBy('timestamp', 'desc')
+                orderBy('timestamp', 'desc'),
+                limit(10) // Limit to latest 10 notifications for better performance
             );
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const newNotifications = snapshot.docs.map(doc => ({
@@ -152,19 +181,19 @@ const CustomTopBar = () => {
         }
     };
 
-    const handleNotificationClick = (notification) => {
+    // Memoize handlers
+    const handleNotificationClick = useCallback((notification) => {
         markAsRead(notification.id);
         if (notification.jobId) {
             router.push(`/job/detail?id=${notification.jobId}`);
         }
-
         if(notification.action === 'Recommendation'){
             router.push('/job-recommendation');
         }
         setShowNotifications(false);
-    };
+    }, [router]);
 
-    const markAllRead = async () => {
+    const markAllRead = useCallback(async () => {
         const unreadNotifications = notifications.filter(n => !n.read);
         await Promise.all(
             unreadNotifications.map(n => {
@@ -172,7 +201,62 @@ const CustomTopBar = () => {
                 return updateDoc(notificationRef, { read: true });
             })
         );
-    };
+    }, [notifications, email]);
+
+    // Render optimized navigation items
+    const renderNavigationItems = () => (
+        <nav className="hidden md:flex items-center space-x-8">
+            {navigationItems.map(({ href, label }) => (
+                <Link key={href} href={href} prefetch={true}>
+                    <div className="text-gray-700 hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                        {label}
+                    </div>
+                </Link>
+            ))}
+            
+            {/* Profile Dropdown */}
+            <div 
+                className="relative group"
+            >
+                <button className="text-gray-700 group-hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center">
+                    Profile & CV
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ml-1 transition-transform group-hover:rotate-180`} viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform group-hover:translate-y-1">
+                    {profileItems.map(({ href, label }) => (
+                        <Link key={href} href={href} prefetch={true}>
+                            <div className="px-4 py-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors cursor-pointer">
+                                {label}
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+            </div>
+            
+            {/* Jobs Dropdown */}
+            <div 
+                className="relative group"
+            >
+                <button className="text-gray-700 group-hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center">
+                    Your Jobs
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ml-1 transition-transform group-hover:rotate-180`} viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                </button>
+                <div className="absolute left-0 mt-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform group-hover:translate-y-1">
+                    {jobItems.map(({ href, label }) => (
+                        <Link key={href} href={href} prefetch={true}>
+                            <div className="px-4 py-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors cursor-pointer">
+                                {label}
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+            </div>
+        </nav>
+    );
 
     if (!isMounted) {
         return null;
@@ -183,11 +267,8 @@ const CustomTopBar = () => {
             <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
                 {/* Logo Section */}
                 <div className="flex items-center space-x-4">
-                    <Link href="/" className="flex items-center">
-                        <motion.div 
-                            whileHover={{ scale: 1.05 }}
-                            className="flex items-center space-x-2"
-                        >
+                    <Link href="/" prefetch={true}>
+                        <div className="flex items-center space-x-2">
                             <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
@@ -195,112 +276,12 @@ const CustomTopBar = () => {
                                 </svg>
                             </div>
                             <span className="text-lg font-bold bg-gradient-to-r from-green-600 to-emerald-700 bg-clip-text text-transparent">CareerConnect</span>
-                        </motion.div>
+                        </div>
                     </Link>
                 </div>
 
-                {/* Navigation Links */}
-                <nav className="hidden md:flex items-center space-x-8">
-                    <Link href="/job">
-                        <motion.div 
-                            whileHover={{ scale: 1.05 }}
-                            className="text-gray-700 hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-                        >
-                            Jobs
-                        </motion.div>
-                    </Link>
-                    <Link href="/job-recommendation">
-                        <motion.div 
-                            whileHover={{ scale: 1.05 }}
-                            className="text-gray-700 hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-                        >
-                            Recommendations
-                        </motion.div>
-                    </Link>
-                    
-                    {/* Profile & CV Dropdown */}
-                    <div 
-                        className="relative"
-                        onMouseEnter={() => setIsHoveringProfile(true)}
-                        onMouseLeave={() => setIsHoveringProfile(false)}
-                        ref={dropdownRef}
-                    >
-                        <button className="text-gray-700 hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center">
-                            Profile & CV
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ml-1 transition-transform ${isHoveringProfile ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        <AnimatePresence>
-                            {isHoveringProfile && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="absolute left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50"
-                                >
-                                    <Link href="/profile">
-                                        <div className="px-4 py-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors cursor-pointer">
-                                            Profile
-                                        </div>
-                                    </Link>
-                                    <Link href="/cv">
-                                        <div className="px-4 py-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors cursor-pointer">
-                                            CV
-                                        </div>
-                                    </Link>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                    
-                    {/* Your Jobs Dropdown */}
-                    <div 
-                        className="relative"
-                        onMouseEnter={() => setIsHoveringJobs(true)}
-                        onMouseLeave={() => setIsHoveringJobs(false)}
-                        ref={dropdownRef1}
-                    >
-                        <button className="text-gray-700 hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center">
-                            Your Jobs
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ml-1 transition-transform ${isHoveringJobs ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        <AnimatePresence>
-                            {isHoveringJobs && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="absolute left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50"
-                                >
-                                    <Link href="/job/saved">
-                                        <div className="px-4 py-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors cursor-pointer">
-                                            Saved Jobs
-                                        </div>
-                                    </Link>
-                                    <Link href="/job/applied">
-                                        <div className="px-4 py-3 hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors cursor-pointer">
-                                            Applied Jobs
-                                        </div>
-                                    </Link>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                    
-                    <Link href="/company">
-                        <motion.div 
-                            whileHover={{ scale: 1.05 }}
-                            className="text-gray-700 hover:text-emerald-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-                        >
-                            Companies
-                        </motion.div>
-                    </Link>
-                </nav>
+                {/* Navigation */}
+                {renderNavigationItems()}
 
                 {/* Right Side Actions */}
                 <div className="flex items-center space-x-4">
@@ -494,4 +475,4 @@ const CustomTopBar = () => {
     );
 };
 
-export default CustomTopBar;
+export default memo(CustomTopBar);

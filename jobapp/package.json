@@ -11,6 +11,8 @@
   "dependencies": {
     "@heroicons/react": "^2.1.5",
     "@prisma/client": "^6.8.2",
+    "@stripe/react-stripe-js": "^3.7.0",
+    "@stripe/stripe-js": "^7.3.1",
     "chart.js": "^4.4.4",
     "firebase": "^11.6.0",
     "html2canvas": "^1.4.1",
